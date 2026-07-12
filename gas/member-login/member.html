@@ -1,0 +1,18 @@
+<!-- ログイン成功後に表示される会員コンテンツ。
+     ここを編集して、会員向けのリンクやお知らせを並べる。
+     注意: innerHTMLで差し込まれるため<script>タグは動かない。
+           ボタン等は login.html 側のグローバル関数(doLogoutなど)を使う。 -->
+<h3>会員ページ</h3>
+<p>ようこそ、<?= memberName ?> さん</p>
+
+<ul>
+  <li><a href="https://sites.google.com/view/あなたのサイト/会員ページ" target="_blank">会員向けサイトを開く</a></li>
+  <li><a href="https://docs.google.com/spreadsheets/d/xxxx" target="_blank">セッション予定表</a></li>
+  <li><a href="https://drive.google.com/drive/folders/xxxx" target="_blank">キャラクターシート置き場</a></li>
+</ul>
+
+<p style="font-size:.85em; color:#777;">
+  リンク先は各自ブックマークせず、毎回このページから開いてください。
+</p>
+
+<button onclick="doLogout()">ログアウト</button>
