@@ -1,5 +1,5 @@
 # アリアンロッド2E リプレイ漫画「鎖を断つ者たち」
-# 囚われの冒険者たちがロイヤルの慰み者にされる日々から脱出し、
+# 囚われの冒険者たちがロイヤルの慰み者にされ、薬物実験を受ける日々から脱出し、
 # 解放したNPCたちと共に新たな集落を興すまで。
 title: 鎖を断つ者たち 〜アリアンロッド2E〜
 font_size: 30
@@ -17,27 +17,30 @@ characters:
   royal:
     name: ロイヤル
     look: 金髪縦ロールの退廃的な貴族。白と金のローブ
+  alchemist:
+    name: 錬金術師
+    look: フードを被った不気味な宮廷錬金術師
   npc:
     name: 解放された民
     look: 髭の老人・若い女性・子供たち
 
 pages:
-  # ---- 1ページ目: 導入(囚われの日々) ----
+  # ---- 1ページ目: 導入(囚われと実験の日々) ----
   - layout: intro_page
     panels:
-      - image: panels/p1_1.png
+      - image: panels/p1_1b.png
         beat: 状況設定
-        description: 城の地下闘技場。玉座のロイヤルが高笑いし、鎖に繋がれた冒険者3人が見世物にされている。
+        description: 城の地下実験室。拘束された冒険者たちに宮廷錬金術師が薬物を投与し、ロイヤルが椅子から愉しげに見物している大ゴマ。
         dialogues:
           - speaker: royal
-            text: もっと踊れ、冒険者ども!
+            text: 次の薬を試せ!
             bx: 0.84
             by: 0.24
             max_chars: 7
             shape: shout
       - image: panels/p1_2.png
         beat: 苦境
-        description: 地下牢。壁に鎖で繋がれ、拷問でボロボロの3人。うなだれている。
+        description: 地下牢。壁に鎖で繋がれ、実験と拷問でボロボロの3人。うなだれている。
         dialogues:
           - speaker: sylpha
             text: もう…限界…
@@ -45,105 +48,99 @@ pages:
             by: 0.26
             max_chars: 4
       - image: panels/p1_3.png
-        beat: 決意
-        description: 暗闇の中、レオンの鋭い眼のアップ。小声で仲間に告げる。
+        beat: 誓い
+        description: 暗闇の中、レオンの鋭い眼のアップ。
         dialogues:
           - speaker: leon
-            text: 今夜、脱出する
+            text: 必ず…ここを出る
             bx: 0.22
             by: 0.74
-            max_chars: 4
+            max_chars: 5
 
-  # ---- 2ページ目: 脱出劇 ----
+  # ---- 2ページ目: 薬物実験 ----
   - layout: standard_6
     panels:
       - image: panels/p2_1.png
-        beat: 起点
-        description: ピコがヘアピンで枷の錠前を外す手元のアップ。
+        beat: 連行
+        description: 衛兵に引き立てられ、実験室の鉄扉へ連行される3人。
         dialogues:
           - speaker: pico
-            text: 鍵は借りたよ
+            text: また あそこか…
             bx: 0.76
             by: 0.26
             max_chars: 4
       - image: panels/p2_2.png
-        beat: 解放
-        description: 牢の扉が開き、レオンが囚われていたNPCの民たちに手を差し伸べる。
+        beat: 実験室
+        description: 怪しげな錬金術実験室の全景。薬瓶・管・魔法陣。錬金術師が支度し、ロイヤルが椅子で見物。
         dialogues:
-          - speaker: leon
-            text: 全員で行くぞ
-            bx: 0.78
-            by: 0.24
-            max_chars: 4
-          - speaker: npc
-            text: 私たちも!?
-            bx: 0.22
-            by: 0.68
-            max_chars: 4
-      - image: panels/p2_3.png
-        beat: 潜行
-        description: 松明の廊下を身を低くして進む一行。曲がり角に衛兵の影。
-        dialogues:
-          - speaker: pico
-            text: 静かに…
-            bx: 0.78
-            by: 0.26
-            max_chars: 4
-      - image: panels/p2_4.png
-        beat: 突破
-        description: シルファが魔法を放ち、城門を吹き飛ばす。閃光。
-        dialogues:
-          - speaker: sylpha
-            text: 道は私が開く!
+          - speaker: royal
+            text: 今日の実験を始めよ
             bx: 0.24
             by: 0.26
             max_chars: 5
-            shape: shout
-      - image: panels/p2_5.png
-        beat: 逃走
-        description: 月明かりの中庭を、壊れた門へ向かって全員で駆け抜ける。流線。
+      - image: panels/p2_3.png
+        beat: 拘束
+        description: 実験台に革ベルトで拘束され、身をよじるレオン。
         dialogues:
           - speaker: leon
-            text: 走れーっ!
-            bx: 0.76
-            by: 0.24
-            max_chars: 5
-            shape: shout
-      - image: panels/p2_6.png
-        beat: 引き
-        description: 玉座の間で杯を叩き落として激怒するロイヤル。
+            text: くっ…!
+            bx: 0.78
+            by: 0.28
+            max_chars: 4
+      - image: panels/p2_4.png
+        beat: 投与
+        description: 錬金術師が光る薬液をシルファに投与する。苦悶の表情。
+        dialogues:
+          - speaker: sylpha
+            text: や…めて…
+            bx: 0.24
+            by: 0.28
+            max_chars: 4
+      - image: panels/p2_5.png
+        beat: 観察
+        description: 檻の中で震えるピコを、ロイヤルが愉しげに記録しながら観察する。
         dialogues:
           - speaker: royal
-            text: ネズミどもがァ!
-            bx: 0.30
-            by: 0.28
-            max_chars: 5
-            shape: shout
+            text: 実に興味深い
+            bx: 0.76
+            by: 0.26
+            max_chars: 4
+      - image: panels/p2_6.png
+        beat: 決意
+        description: 牢に投げ戻された3人。レオンだけが顔を上げ、眼に炎が宿る。
+        dialogues:
+          - speaker: leon
+            text: 今夜、脱出する
+            bx: 0.28
+            by: 0.30
+            max_chars: 4
 
-  # ---- 3ページ目: 集落の誕生 ----
+  # ---- 3ページ目: 脱出と集落の誕生 ----
   - layout: climax_splash
     panels:
       - image: panels/p3_1.png
-        beat: 夜明け
-        description: 川辺の森の空き地で朝日を浴びて休む一行。安堵の表情。
+        beat: 突破
+        description: シルファの魔法が城門を吹き飛ばし、解放したNPCの民たちと共に駆け出す一行。閃光。
         dialogues:
           - speaker: sylpha
-            text: 自由の朝…
-            bx: 0.75
-            by: 0.28
-            max_chars: 4
+            text: 道は私が開く!
+            bx: 0.76
+            by: 0.26
+            max_chars: 5
+            shape: shout
       - image: panels/p3_2.png
-        beat: 宣言
-        description: レオンが大地に杭を打ち込む。髭の老人が頷く。
+        beat: 逃走
+        description: 月明かりの森へ、民たちを連れて逃げ込む3人。背後に遠ざかる城。
         dialogues:
           - speaker: leon
-            text: ここに村を興そう
+            text: 振り返るな、走れ!
             bx: 0.26
             by: 0.26
             max_chars: 5
+            shape: shout
       - image: panels/p3_3.png
         beat: 大団円
-        description: 数カ月後の俯瞰。丸太の家・畑・柵のある集落。冒険者とNPCたちが共に働き、子供が駆け回る。朝の光。
+        description: 数カ月後の俯瞰。川辺に丸太の家・畑・柵のある集落。冒険者とNPCたちが共に働き、子供が駆け回る。朝の光。
         dialogues:
           - speaker: npc
             text: こうして、冒険者たちの集落が生まれた
