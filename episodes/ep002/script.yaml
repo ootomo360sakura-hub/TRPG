@@ -50,10 +50,9 @@ pages:
         dialogues:
           - speaker: leon
             text: 今夜、脱出する
-            bx: 0.26
-            by: 0.72
+            bx: 0.22
+            by: 0.74
             max_chars: 4
-            tail: up-right
 
   # ---- 2ページ目: 脱出劇 ----
   - layout: standard_6
