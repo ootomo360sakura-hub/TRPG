@@ -24,19 +24,12 @@ FONT_CANDIDATES = [
     "C:/Windows/Fonts/msgothic.ttc",
 ]
 
-# 縦書き用の字形置換(フォントの縦書きグリフに頼らない簡易版)
-VERTICAL_MAP = {
-    "ー": "丨",
-    "−": "丨",
-    "~": "≀",
-    "「": "﹁",
-    "」": "﹂",
-    "(": "︵",
-    ")": "︶",
-    "…": "︙",
-}
-# 右上に寄せて小さく描く句読点
+# 縦書きで90度回転して描く文字(縦書き専用グリフを持たないフォント向け)
+ROTATE_CHARS = set("ー−〜~…()「」『』[]<>")
+# 右上に寄せて描く句読点
 PUNCT_SHIFT = {"、", "。"}
+# 行頭(列頭)に置かない文字 → 前の列末尾に送る
+KINSOKU_HEAD = set("、。,.!?!?・ー〜…っゃゅょァィゥェォッ」』)]")
 
 
 def find_font(size):
@@ -47,7 +40,7 @@ def find_font(size):
 
 
 def wrap_vertical(text, max_chars):
-    """テキストを縦書きの列(右→左)に分割する。"""
+    """テキストを縦書きの列(右→左)に分割し、行頭禁則を適用する。"""
     cols, col = [], []
     for ch in text:
         if ch == "\n":
@@ -60,10 +53,27 @@ def wrap_vertical(text, max_chars):
             col = []
     if col:
         cols.append(col)
-    return cols
+    # 行頭禁則: 列頭の句読点等を前の列末尾へ送る
+    for i in range(1, len(cols)):
+        while cols[i] and cols[i][0] in KINSOKU_HEAD:
+            cols[i - 1].append(cols[i].pop(0))
+    return [c for c in cols if c]
 
 
-def draw_vertical_text(draw, cx, cy, cols, font, size, fill="black"):
+def rotated_glyph(ch, font, size):
+    """文字を90度時計回りに回転したタイル画像を返す(長音・括弧・三点リーダ用)。"""
+    tile = Image.new("RGBA", (int(size * 1.5), int(size * 1.5)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+    bbox = d.textbbox((0, 0), ch, font=font)
+    d.text(
+        ((tile.width - (bbox[2] - bbox[0])) / 2 - bbox[0],
+         (tile.height - (bbox[3] - bbox[1])) / 2 - bbox[1]),
+        ch, font=font, fill="black",
+    )
+    return tile.rotate(-90, resample=Image.BICUBIC)
+
+
+def draw_vertical_text(img, draw, cx, cy, cols, font, size, fill="black"):
     """列リストを中心(cx, cy)に縦書き描画する。列は右→左。"""
     line_h = int(size * 1.18)
     col_w = int(size * 1.25)
@@ -76,13 +86,15 @@ def draw_vertical_text(draw, cx, cy, cols, font, size, fill="black"):
         x = x0 - i * col_w
         for j, ch in enumerate(col):
             y = y0 + j * line_h
-            g = VERTICAL_MAP.get(ch, ch)
-            if ch in PUNCT_SHIFT:
-                draw.text((x + size * 0.35, y - size * 0.30), g, font=font, fill=fill)
+            if ch in ROTATE_CHARS:
+                tile = rotated_glyph(ch, font, size)
+                img.paste(fill, (int(x - tile.width / 2), int(y + size / 2 - tile.height / 2)), tile)
+            elif ch in PUNCT_SHIFT:
+                draw.text((x + size * 0.35, y - size * 0.30), ch, font=font, fill=fill)
             else:
-                bbox = draw.textbbox((0, 0), g, font=font)
+                bbox = draw.textbbox((0, 0), ch, font=font)
                 w = bbox[2] - bbox[0]
-                draw.text((x - w / 2, y), g, font=font, fill=fill)
+                draw.text((x - w / 2, y), ch, font=font, fill=fill)
     return total_w, total_h
 
 
@@ -112,7 +124,7 @@ def draw_tail(draw, bx, by, bw, bh, direction):
     draw.line([p2, tip], fill="black", width=3)
 
 
-def draw_bubble(draw, panel_rect, dialogue, font, size):
+def draw_bubble(img, draw, panel_rect, dialogue, font, size):
     px, py, pw, ph = panel_rect
     text = dialogue["text"]
     max_chars = int(dialogue.get("max_chars", 7))
@@ -147,7 +159,7 @@ def draw_bubble(draw, panel_rect, dialogue, font, size):
             draw_tail(draw, bx, by, bw, bh, dialogue["tail"])
         draw.ellipse([bx, by, bx + bw, by + bh], fill="white", outline="black", width=3)
 
-    draw_vertical_text(draw, cx, cy, cols, font, size)
+    draw_vertical_text(img, draw, cx, cy, cols, font, size)
 
 
 def cover_fit(img, w, h):
@@ -204,7 +216,7 @@ def compose(episode_dir: Path):
     # 画像を貼り終えてから吹き出しを重ねる
     for rect, panel in zip(rects, panels):
         for dlg in panel.get("dialogues", []):
-            draw_bubble(draw, rect, dlg, font, font_size)
+            draw_bubble(page, draw, rect, dlg, font, font_size)
 
     out = episode_dir / "page_1.png"
     page.save(out)
