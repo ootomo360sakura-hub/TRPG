@@ -1,0 +1,62 @@
+# エピソード台本: コマ割りレイアウト・各コマの画像・セリフ・アフレコ音声を定義する
+title: はじめてのTRPG 〜運命のダイス〜
+layout: yonkoma_basic   # data/layouts.json のID(vault/コマ割り/ から収集)
+font_size: 30
+
+characters:
+  gm:
+    name: ケンタ(GM)
+    look: 眼鏡の少年、黒髪、パーカー
+  misaki:
+    name: ミサキ
+    look: ショートヘアの少女、元気
+
+panels:
+  - image: panels/panel1.png
+    beat: 起
+    description: 放課後の教室。テーブルにキャラシートとダイス。GMのケンタが芝居がかって宣言し、ミサキがワクワクしている。
+    dialogues:
+      - speaker: gm
+        text: 今夜は伝説の竜に挑む!
+        bx: 0.80
+        by: 0.32
+        max_chars: 6
+        tail: down-left
+      - speaker: misaki
+        text: まかせて!
+        bx: 0.15
+        by: 0.30
+        max_chars: 5
+        tail: down-right
+
+  - image: panels/panel2.png
+    beat: 承
+    description: ミサキがダイスを振りかぶるアップ。集中線、真剣な表情。
+    dialogues:
+      - speaker: misaki
+        text: 運命のダイス、えいっ!
+        bx: 0.20
+        by: 0.32
+        max_chars: 6
+        shape: shout
+
+  - image: panels/panel3.png
+    beat: 転
+    description: 転がったダイスの出目は「1」。ケンタが凍りつく。シーン……という空気。
+    dialogues:
+      - speaker: gm
+        text: 出目1、大失敗…
+        bx: 0.82
+        by: 0.35
+        max_chars: 5
+        tail: down-left
+
+  - image: panels/panel4.png
+    beat: 結
+    description: 想像の世界。ドラゴンの前でミサキが盛大にすっ転んでいる。ドラゴンは困惑して汗を垂らす。
+    dialogues:
+      - speaker: misaki
+        text: 竜さん、出直してきます…
+        bx: 0.18
+        by: 0.38
+        max_chars: 6

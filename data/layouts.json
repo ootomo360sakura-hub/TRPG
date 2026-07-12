@@ -1,0 +1,202 @@
+{
+  "yonkoma_basic": {
+    "type": "komawari",
+    "id": "yonkoma_basic",
+    "name": "4コマ基本",
+    "panel_count": 4,
+    "reading": "ttb",
+    "page": {
+      "width": 1200,
+      "height": 1800,
+      "margin": 50,
+      "gutter": 30
+    },
+    "panels": [
+      {
+        "index": 1,
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 0.25
+      },
+      {
+        "index": 2,
+        "x": 0.0,
+        "y": 0.25,
+        "w": 1.0,
+        "h": 0.25
+      },
+      {
+        "index": 3,
+        "x": 0.0,
+        "y": 0.5,
+        "w": 1.0,
+        "h": 0.25
+      },
+      {
+        "index": 4,
+        "x": 0.0,
+        "y": 0.75,
+        "w": 1.0,
+        "h": 0.25
+      }
+    ],
+    "tags": [
+      "4コマ",
+      "縦読み",
+      "ギャグ",
+      "日常"
+    ],
+    "source_note": "vault/コマ割り/4コマ基本.md"
+  },
+  "climax_splash": {
+    "type": "komawari",
+    "id": "climax_splash",
+    "name": "クライマックス大ゴマ",
+    "panel_count": 3,
+    "reading": "rtl",
+    "page": {
+      "width": 1400,
+      "height": 2000,
+      "margin": 60,
+      "gutter_x": 24,
+      "gutter_y": 36
+    },
+    "panels": [
+      {
+        "index": 1,
+        "x": 0.5,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 0.3
+      },
+      {
+        "index": 2,
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 0.3
+      },
+      {
+        "index": 3,
+        "x": 0.0,
+        "y": 0.3,
+        "w": 1.0,
+        "h": 0.7
+      }
+    ],
+    "tags": [
+      "クライマックス",
+      "見せゴマ",
+      "アクション"
+    ],
+    "source_note": "vault/コマ割り/クライマックス大ゴマ.md"
+  },
+  "intro_page": {
+    "type": "komawari",
+    "id": "intro_page",
+    "name": "導入ページ",
+    "panel_count": 3,
+    "reading": "rtl",
+    "page": {
+      "width": 1400,
+      "height": 2000,
+      "margin": 60,
+      "gutter_x": 24,
+      "gutter_y": 36
+    },
+    "panels": [
+      {
+        "index": 1,
+        "x": 0.0,
+        "y": 0.0,
+        "w": 1.0,
+        "h": 0.55
+      },
+      {
+        "index": 2,
+        "x": 0.5,
+        "y": 0.55,
+        "w": 0.5,
+        "h": 0.45
+      },
+      {
+        "index": 3,
+        "x": 0.0,
+        "y": 0.55,
+        "w": 0.5,
+        "h": 0.45
+      }
+    ],
+    "tags": [
+      "導入",
+      "状況説明",
+      "大ゴマ"
+    ],
+    "source_note": "vault/コマ割り/導入ページ.md"
+  },
+  "standard_6": {
+    "type": "komawari",
+    "id": "standard_6",
+    "name": "標準6コマ",
+    "panel_count": 6,
+    "reading": "rtl",
+    "page": {
+      "width": 1400,
+      "height": 2000,
+      "margin": 60,
+      "gutter_x": 24,
+      "gutter_y": 36
+    },
+    "panels": [
+      {
+        "index": 1,
+        "x": 0.5,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 0.333
+      },
+      {
+        "index": 2,
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 0.333
+      },
+      {
+        "index": 3,
+        "x": 0.5,
+        "y": 0.333,
+        "w": 0.5,
+        "h": 0.333
+      },
+      {
+        "index": 4,
+        "x": 0.0,
+        "y": 0.333,
+        "w": 0.5,
+        "h": 0.333
+      },
+      {
+        "index": 5,
+        "x": 0.5,
+        "y": 0.667,
+        "w": 0.5,
+        "h": 0.333
+      },
+      {
+        "index": 6,
+        "x": 0.0,
+        "y": 0.667,
+        "w": 0.5,
+        "h": 0.333
+      }
+    ],
+    "tags": [
+      "ストーリー",
+      "標準",
+      "会話劇"
+    ],
+    "source_note": "vault/コマ割り/標準6コマ.md"
+  }
+}
