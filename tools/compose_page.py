@@ -175,6 +175,20 @@ def cover_fit(img, w, h):
 def compose(episode_dir: Path):
     script = yaml.safe_load((episode_dir / "script.yaml").read_text(encoding="utf-8"))
     layouts = json.loads(LAYOUTS.read_text(encoding="utf-8"))
+    # 複数ページ(pages:)と単一ページ(layout:+panels:)の両形式に対応
+    pages = script.get("pages")
+    if pages is None:
+        pages = [{"layout": script["layout"], "panels": script["panels"]}]
+    outs = []
+    for page_no, page_def in enumerate(pages, start=1):
+        outs.append(
+            compose_one(episode_dir, layouts, page_def, page_no,
+                        int(script.get("font_size", 30)))
+        )
+    return outs
+
+
+def compose_one(episode_dir: Path, layouts, script, page_no: int, font_size: int):
     layout = layouts[script["layout"]]
 
     page_cfg = layout["page"]
@@ -186,7 +200,7 @@ def compose(episode_dir: Path):
 
     page = Image.new("RGB", (W, H), "white")
     draw = ImageDraw.Draw(page)
-    font_size = int(script.get("font_size", 30))
+    font_size = int(script.get("font_size", font_size))
     font = find_font(font_size)
 
     panels = script["panels"]
@@ -218,7 +232,7 @@ def compose(episode_dir: Path):
         for dlg in panel.get("dialogues", []):
             draw_bubble(page, draw, rect, dlg, font, font_size)
 
-    out = episode_dir / "page_1.png"
+    out = episode_dir / f"page_{page_no}.png"
     page.save(out)
     print(f"生成: {out}")
     return out

@@ -32,9 +32,12 @@ description: コマ割りされた1ページ漫画を作成する。vault/のコ
 
 ### 2. 台本作成
 
-`episodes/ep00N/script.yaml` を作る(`episodes/ep001/script.yaml` が実例)。
+`episodes/ep00N/script.yaml` を作る(単一ページ=`episodes/ep001`、複数ページ=`episodes/ep002` が実例)。
 
-- `layout:` に選んだレイアウトID
+- 単一ページはトップレベルに `layout:` と `panels:`
+- 複数ページ(ストーリーもの)は `pages:` のリストにし、各要素に `layout:` と `panels:` を持たせる
+  (出力は `page_1.png`, `page_2.png`, … になる)
+- ページ構成の目安: 導入=`intro_page` → 展開=`standard_6` → 見せ場=`climax_splash`
 - コマ数はレイアウトの `panels` 数と一致させる(不一致はエラーになる)
 - 各コマ: `image`(相対パス)、`beat`(起承転結)、`description`(絵の内容)、`dialogues`
 - セリフ(dialogue)のパラメータ:
@@ -45,6 +48,9 @@ description: コマ割りされた1ページ漫画を作成する。vault/のコ
   - `tail`: しっぽの向き `down-left` など(話者の口元へ向ける)
 
 ### 3. コマ画像生成(Higgsfield MCP)
+
+**先に `mcp__Higgsfield__balance` で残高を確認する**(コマ数×約1〜2クレジット必要。
+不足なら生成せず、ユーザーにチャージを依頼して中断ポイントを記録しておく)。
 
 各コマを `mcp__Higgsfield__generate_image`(model: `nano_banana_pro`)で生成する。
 プロンプトの約束事:
