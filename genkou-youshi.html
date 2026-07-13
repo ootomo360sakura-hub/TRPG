@@ -75,7 +75,6 @@
 <body>
 <div class="toolbar">
   <strong data-k="原稿用紙" data-h="げんこうようし">原稿用紙</strong>
-  <label><input type="checkbox" id="optKana"> ひらがな</label>
   <label><span data-k="用紙" data-h="ようし">用紙</span>
     <select id="selPaper">
       <option value="A4">A4</option>
@@ -137,19 +136,6 @@ function currentKey() {
   return paper + dir;
 }
 function M() { return PRESETS[currentKey()]; }
-
-function kanaOn() { return document.getElementById('optKana').checked; }
-
-/* ひらがな表記の切り替え（data-k=漢字／data-h=ひらがな） */
-function applyKana() {
-  var on = kanaOn();
-  var els = document.querySelectorAll('[data-k]');
-  for (var i = 0; i < els.length; i++) {
-    els[i].textContent = on ? els[i].getAttribute('data-h') : els[i].getAttribute('data-k');
-  }
-  try { localStorage.setItem('genko-kana', on ? '1' : ''); } catch (e) {}
-  render();
-}
 
 ta.value = localStorage.getItem('genko-text') || '';
 
@@ -258,9 +244,7 @@ function render() {
   }
   // 空白（半角/全角スペース・タブ）と改行はカウントしない
   var chars = Array.from(ta.value.replace(/[\s　]/g, '')).length;
-  var kn = kanaOn();
-  document.getElementById('count').textContent =
-    chars + (kn ? 'じ／' : '字／') + pgs.length + (kn ? 'まい' : '枚');
+  document.getElementById('count').textContent = chars + '字／' + pgs.length + '枚';
   try { localStorage.setItem('genko-text', ta.value); } catch (e) {}
   updateCaret();
 }
@@ -356,9 +340,6 @@ function saveSettings() {
     localStorage.setItem('genko-dir', dir);
   } catch (e) {}
 }
-
-document.getElementById('optKana').checked = (localStorage.getItem('genko-kana') === '1');
-document.getElementById('optKana').addEventListener('change', applyKana);
 
 document.getElementById('selPaper').value = paper;
 document.getElementById('selDir').value = dir;
@@ -477,7 +458,7 @@ function setPrintSize() {
 }
 
 setPrintSize();
-applyKana();   // 表記（漢字/ひらがな）を初期状態に合わせて反映（内部でrenderも実行）
+render();
 ta.focus({ preventScroll: true });
 </script>
 </body>
