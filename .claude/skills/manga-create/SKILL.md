@@ -52,6 +52,10 @@ description: コマ割りされた1ページ漫画を作成する。vault/のコ
 **先に `mcp__Higgsfield__balance` で残高を確認する**(コマ数×約1〜2クレジット必要。
 不足なら生成せず、ユーザーにチャージを依頼して中断ポイントを記録しておく)。
 
+残高不足で生成に進めない間も、`episodes/ep00N/prompts.md` に全コマ分のプロンプト
+(固定の人物描写・aspect_ratioを含む)を書き出しておくと、チャージ後すぐに
+生成へ進める(`episodes/ep002/prompts.md` が実例)。
+
 各コマを `mcp__Higgsfield__generate_image`(model: `nano_banana_pro`)で生成する。
 プロンプトの約束事:
 
