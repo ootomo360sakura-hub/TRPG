@@ -1,0 +1,885 @@
+<title>ClassCloud 中学校研修シミュレーション</title>
+<style>
+  :root {
+    --ground: #F5F6F9;
+    --surface: #FFFFFF;
+    --surface-sunk: #EEF0F5;
+    --ink: #1A1D24;
+    --ink-soft: #444B58;
+    --ink-mute: #6B7385;
+    --rule: #DCE0E8;
+    --rule-soft: #E8EBF1;
+    --accent: #2B4C8C;
+    --accent-soft: #E7EDF8;
+    --p0: #A83226;
+    --p0-bg: #FAEBE8;
+    --p1: #96682033;
+    --p1-ink: #8A5E19;
+    --p1-bg: #FAF2E3;
+    --p2: #2F6B50;
+    --p2-bg: #E8F2EC;
+    --serif: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", "Songti SC", serif;
+    --sans: "Hiragino Sans", "Yu Gothic", YuGothic, "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #14171C;
+      --surface: #1B1F26;
+      --surface-sunk: #22262F;
+      --ink: #E5E8EE;
+      --ink-soft: #B8BFCC;
+      --ink-mute: #8A93A5;
+      --rule: #2F3540;
+      --rule-soft: #262B34;
+      --accent: #8FB0E8;
+      --accent-soft: #1F2937;
+      --p0: #E8887A;
+      --p0-bg: #331F1C;
+      --p1-ink: #D9A94F;
+      --p1-bg: #2E2718;
+      --p2: #7BBF9C;
+      --p2-bg: #1B2A22;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #14171C;
+    --surface: #1B1F26;
+    --surface-sunk: #22262F;
+    --ink: #E5E8EE;
+    --ink-soft: #B8BFCC;
+    --ink-mute: #8A93A5;
+    --rule: #2F3540;
+    --rule-soft: #262B34;
+    --accent: #8FB0E8;
+    --accent-soft: #1F2937;
+    --p0: #E8887A;
+    --p0-bg: #331F1C;
+    --p1-ink: #D9A94F;
+    --p1-bg: #2E2718;
+    --p2: #7BBF9C;
+    --p2-bg: #1B2A22;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  /* ---- masthead ---- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 64px 0 32px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(30px, 5.5vw, 46px);
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: .01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 16px;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 62ch;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+    padding-top: 4px;
+  }
+
+  /* ---- sections ---- */
+  section { padding-top: 56px; }
+  h2 {
+    font-family: var(--serif);
+    font-size: clamp(21px, 3vw, 27px);
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    text-wrap: balance;
+  }
+  h2 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: .1em;
+    flex: none;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.6;
+    margin: 36px 0 10px;
+    color: var(--ink);
+  }
+  h4 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+    margin: 30px 0 10px;
+  }
+  p { margin: 0 0 16px; max-width: 68ch; }
+  .lede { color: var(--ink-soft); }
+  strong { font-weight: 700; }
+  em { font-style: normal; background: var(--accent-soft); padding: 0 3px; border-radius: 2px; }
+  code {
+    font-family: var(--mono);
+    font-size: .86em;
+    background: var(--surface-sunk);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  ul { margin: 0 0 16px; padding-left: 1.25em; max-width: 68ch; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink-mute); }
+
+  /* ---- tables ---- */
+  .scroller { overflow-x: auto; margin: 0 0 22px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 460px;
+    font-size: 14.5px;
+    line-height: 1.7;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  th {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---- timeline ---- */
+  .tl { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; }
+  .tl-row {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 0 22px;
+    padding: 20px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .tl-row:first-child { border-top: 1px solid var(--rule); }
+  .tl-time {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    letter-spacing: .02em;
+    padding-top: 3px;
+  }
+  .tl-time small {
+    display: block;
+    color: var(--ink-mute);
+    font-size: 11px;
+    letter-spacing: 0;
+    margin-top: 4px;
+  }
+  .tl-body h3 { margin: 0 0 8px; }
+  .tl-body ul { margin-bottom: 0; }
+  .tl-body p:last-child { margin-bottom: 0; }
+  .snag { color: var(--p0); font-weight: 700; }
+  .good { color: var(--p2); font-weight: 700; }
+
+  /* ---- Q&A ---- */
+  .qa { border-top: 1px solid var(--rule); margin-bottom: 26px; }
+  .qa-item { padding: 18px 0; border-bottom: 1px solid var(--rule-soft); }
+  .q {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    align-items: baseline;
+  }
+  .q .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: .06em;
+    font-weight: 600;
+  }
+  .a {
+    margin-left: 54px;
+    color: var(--ink-soft);
+    font-size: 15px;
+    border-left: 2px solid var(--rule);
+    padding-left: 16px;
+  }
+  .a p { margin-bottom: 10px; }
+  .a p:last-child { margin-bottom: 0; }
+  .a table { min-width: 380px; margin-top: 12px; }
+
+  /* ---- callout ---- */
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 22px 26px;
+    margin: 0 0 24px;
+  }
+  .callout h4 { margin-top: 0; }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+
+  .three { display: grid; gap: 14px; margin-bottom: 24px; }
+  .three-item {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 18px 22px;
+  }
+  .three-item .k {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 5px;
+  }
+  .three-item p { margin: 0; font-size: 15px; color: var(--ink-soft); }
+
+  /* ---- priority chips ---- */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .08em;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip-p0 { background: var(--p0-bg); color: var(--p0); }
+  .chip-p1 { background: var(--p1-bg); color: var(--p1-ink); }
+  .chip-p2 { background: var(--p2-bg); color: var(--p2); }
+
+  .prio-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 38px 0 12px;
+  }
+  .prio-head .label {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  /* ---- checklist ---- */
+  .checks { display: grid; gap: 22px; margin-bottom: 24px; }
+  .check-grp {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 20px 24px;
+  }
+  .check-grp h4 { margin-top: 0; }
+  .check-grp ul { list-style: none; padding: 0; margin: 0; }
+  .check-grp li {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 10px;
+    font-size: 14.5px;
+    line-height: 1.65;
+    margin-bottom: 9px;
+    color: var(--ink-soft);
+  }
+  .check-grp li::before {
+    content: "";
+    display: block;
+    width: 13px; height: 13px;
+    border: 1.5px solid var(--ink-mute);
+    border-radius: 2px;
+    margin-top: 6px;
+  }
+  .check-grp li:last-child { margin-bottom: 0; }
+
+  /* ---- revised timetable emphasis ---- */
+  tr.changed td { background: var(--accent-soft); }
+  tr.changed td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+  .memo {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 2;
+    background: var(--surface-sunk);
+    border: 1px dashed var(--rule);
+    padding: 18px 22px;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    color: var(--ink-soft);
+    margin-bottom: 24px;
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 24px;
+    border-top: 2px solid var(--ink);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    letter-spacing: .04em;
+  }
+
+  @media (max-width: 620px) {
+    .tl-row { grid-template-columns: 1fr; gap: 6px; }
+    .tl-time { padding-top: 0; }
+    .tl-time small { display: inline; margin-left: 10px; }
+    .q { grid-template-columns: 1fr; gap: 2px; }
+    .a { margin-left: 0; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">校内研修 ／ 実施前シミュレーション</p>
+  <h1>ClassCloud 研修を中学校でやったら、どこで止まるか</h1>
+  <p class="standfirst">小学校を想定して作った研修キット一式を、公立中学校の放課後研修にそのまま持ち込んだ場合の机上シミュレーション。詰まりどころ、出る質問と回答案、要点のまとめ方、改善点をまとめた。</p>
+  <div class="meta">
+    <span>2026-08-16</span>
+    <span>ICT支援員</span>
+    <span>想定：22名／60分／パソコン教室</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">00</span>シミュレーションの設定</h2>
+  <p class="lede">「うまくいく前提」ではなく「どこで止まるか」を洗い出すことを目的に、資料一式を中学校の文脈に置いて進行を再現した。</p>
+
+  <h4>使用した資料</h4>
+  <div class="scroller">
+  <table>
+    <thead><tr><th>ファイル</th><th>内容</th><th class="num">想定</th></tr></thead>
+    <tbody>
+      <tr><td>研修計画書.docx</td><td>ClassCloud活用 ― 振り返りをAIで活かす</td><td class="num">60分</td></tr>
+      <tr><td>進行台本.docx</td><td>スライド1〜8と対応した読み上げ台本</td><td class="num">60分</td></tr>
+      <tr><td>スライド.pptx</td><td>投影用（明るい版あり）</td><td class="num">―</td></tr>
+      <tr><td>ハンズオン手順書.docx</td><td>所見ドラフトを作る A4 1枚</td><td class="num">約15分</td></tr>
+      <tr><td>Class_Cloud活用研修_配布用まとめ.docx</td><td>教材配布・AIくらすけ・所見AI</td><td class="num">45〜50分</td></tr>
+      <tr><td>サンプルデータ_小6社会_明治維新.md</td><td>ダミー児童6名の振り返りログ</td><td class="num">―</td></tr>
+      <tr><td>AI出力例_振り返りFB_所見_見取り.md</td><td>実演で見せるAI出力の期待値</td><td class="num">―</td></tr>
+      <tr><td>研修進行＆撮影見せ方ガイド.md</td><td>進行・撮影・トラブル対応</td><td class="num">―</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>想定した会場と参加者</h4>
+  <div class="scroller">
+  <table>
+    <tbody>
+      <tr><td style="width:34%">実施校</td><td>公立中学校（各学年3クラス／全9学級）</td></tr>
+      <tr><td>日時・会場</td><td>放課後 16:30〜17:30（職員会議後）／パソコン教室</td></tr>
+      <tr><td>参加者</td><td>22名（教科担任19・養護教諭1・SC非常勤1・管理職1）</td></tr>
+      <tr><td>進行</td><td>ICT支援員1名 ＋ 情報担当（技術科教員）1名</td></tr>
+      <tr><td>前提</td><td>教材配布までは全員経験あり。AI機能は未使用</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>参加者は6タイプを想定して動かした ―<strong>社会科主任</strong>（AIに懐疑的だが所見の負担は本音で大きい）、<strong>数学科</strong>（ICTは平気だが振り返りの時間が取れない）、<strong>英語科</strong>（推進役になりうる）、<strong>保健体育科</strong>（17:00に部活動で退室）、<strong>養護教諭</strong>（「心の空模様」に関心／守秘の懸念が最大）、<strong>教務主任</strong>（評定・調査書との整合を気にする）。</p>
+</section>
+
+<section>
+  <h2><span class="num">01</span>開始前に判明した前提のズレ</h2>
+  <p class="lede">進行を回す前段階、資料を中学校の文脈に置いた瞬間に3つ噛み合わなくなった。当日ではなく事前に潰すべき項目。</p>
+
+  <h3>ズレ① サンプルデータが小学校のもの</h3>
+  <p>デモ用ダミーは<strong>小6社会「明治の国づくりを進めた人々」</strong>、児童6名。中学校で投影すると、社会科教員以外の全員にとって「よその学校の話」になる。</p>
+  <ul>
+    <li>中2社会（歴史的分野）の明治維新は内容がほぼ重なるため、<strong>社会科だけは流用可能</strong></li>
+    <li>数学・英語・理科・技術・保体・音美には接点がゼロ</li>
+    <li>「児童」表記が全編に残っている。中学校では<em>「生徒」</em>への統一が必要（計画書・台本・手順書・AI出力例・スライドの全ファイル）</li>
+  </ul>
+
+  <h3>ズレ② 「所見」という言葉が中学校では狭すぎる</h3>
+  <p>資料は「所見＝通知表の所見欄」を前提に組まれている。中学校教員が「所見」と聞いて連想するのは3つで、負担の重さも法的な重さも別物。</p>
+  <div class="scroller">
+  <table>
+    <thead><tr><th>中学校での実物</th><th class="num">AI下書き</th><th>理由</th></tr></thead>
+    <tbody>
+      <tr><td>通知表の所見欄</td><td class="num"><span class="chip chip-p2">◯ 対象</span></td><td>校内文書。担任が確認・加筆して仕上げる</td></tr>
+      <tr><td>観点別学習状況の評価・評定</td><td class="num"><span class="chip chip-p0">× 不可</span></td><td>評価の判断そのもの。教員の専門的判断が根拠</td></tr>
+      <tr><td>調査書（内申書）</td><td class="num"><span class="chip chip-p0">× 不可</span></td><td>進路に直結。開示対象。流用は不可</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>この線引きが資料のどこにも書かれていない。中学校では<strong>必ず質問が出る</strong>論点であり、触れずに進むと「AIに内申を書かせる研修」という誤解を残す。</p>
+
+  <h3>ズレ③ 費用対効果の数字が小学校の規模</h3>
+  <p>台本の「1人30分×30人＝約15時間」は学級担任が1学級分を書く前提の数字。中学校の教科担任は3〜5クラス・100〜160名を担当する。<strong>そのまま読むと「うちの話じゃない」と処理される。</strong></p>
+  <div class="scroller">
+  <table>
+    <thead><tr><th></th><th>ビフォー</th><th>アフター</th></tr></thead>
+    <tbody>
+      <tr><td>学級担任<br>（自学級34名の所見）</td><td>1人25分 × 34名<br>＝ <strong>約14時間</strong></td><td>下書き→確認加筆 8分 × 34名<br>＝ <strong>約4.5時間</strong></td></tr>
+      <tr><td>教科担任<br>（担当4クラス136名）</td><td>学期末に記憶と提出物を遡って再構成</td><td>蓄積から傾向が出るため、遡り作業そのものが消える</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span>タイムライン実況</h2>
+  <p class="lede">台本どおりに進めた場合の進行を、詰まりどころ込みで再現する。左が想定の実測時間、括弧内が資料上の配分。</p>
+
+  <div class="tl">
+    <div class="tl-row">
+      <div class="tl-time">0:00–0:13<small>台本 10分</small></div>
+      <div class="tl-body">
+        <h3>導入・概要</h3>
+        <ul>
+          <li>ゴール宣言「今日の出口＝所見が1人ぶん下書きできる状態」は<span class="good">そのまま有効</span>。中学校でもよく効く</li>
+          <li>10秒フック（所見ドラフトが出る画面を一瞬見せる）で場の空気が変わる。<span class="good">この仕掛けは残すべき</span></li>
+          <li><span class="snag">詰まり</span>：職員会議が押して開始が4分遅れ。事前アナウンスの「各自ログイン済みに」が徹底されず3名がログインから開始</li>
+          <li><span class="snag">詰まり</span>：3つのAIの説明中、教務主任から最初の質問 ―「それ、評定に使うんですか？」。台本では安全の話は0:55（最後）。<strong>60分の最後まで不安を抱えたまま聞くことになり、以降の集中が落ちる</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-time">0:13–0:22<small>台本 7分</small></div>
+      <div class="tl-body">
+        <h3>ポイント② 返す</h3>
+        <ul>
+          <li>薄い振り返り3枚を並べる見せ方は<span class="good">強い</span>。「同じAIが子に合わせて返し方を変える」が一目で伝わる</li>
+          <li><span class="snag">詰まり</span>：小6の振り返り文（「黒船びっくりした」）が会場で笑いになり、同時に自分ごと化から遠ざかる</li>
+          <li><span class="snag">詰まり</span>：数学科から即座に「うちの教科で振り返り5分は取れません。50分で問題演習まで入れると無理」</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-time">0:22–0:29<small>台本 7分</small></div>
+      <div class="tl-body">
+        <h3>ポイント③ 見取る</h3>
+        <p><strong>中学校で最も反応が良かったパート。</strong>クラス全体のつまずき傾向の要約は、教科担任の「4クラス分の実態把握」という痛みに直撃する。</p>
+        <p><span class="snag">詰まり</span>：「クラス」という単位の意味が担任と教科担任で食い違う。教科担任にとっては担当クラスの学習傾向、担任にとっては学級の様子と人間関係。<strong>資料はこの2つを区別していないため、両者とも微妙に自分の話だと思えない。</strong></p>
+      </div>
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-time">0:29–0:41<small>台本 8分</small></div>
+      <div class="tl-body">
+        <h3>ポイント④ 所見にする ― 見せ場</h3>
+        <p>ゆうと（第5時で関心が急変）を所見文が拾う場面は説得力がある。一方、<span class="snag">ここで質問が集中し4分オーバー</span>。出た3問はいずれも台本に回答が用意されていない。</p>
+        <ul>
+          <li>「これ、内申には使えるんですか」（教務主任）</li>
+          <li>「生徒がAIに振り返りを書かせてたら、AIがAIの文を読んで所見を書くことになりませんか」（英語科）</li>
+          <li>「今から始めて2学期の通知表に間に合うんですか。データが溜まってないですよね」（社会科主任）</li>
+        </ul>
+        <p><strong>3つ目が構造的に最も重い。</strong>デモは6時間分の蓄積がある状態を見せているが、参加者は蓄積ゼロから始める。「いつ始めれば学期末に使えるか」の逆算が資料に一切ない。</p>
+      </div>
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-time">0:41–0:57<small>台本 23分</small></div>
+      <div class="tl-body">
+        <h3>ハンズオン</h3>
+        <ul>
+          <li><span class="snag">詰まり</span>：<code>ハンズオン手順書.docx</code> の画面写真が<strong>「（写真をはるスペース）」のまま空欄</strong>。文字だけの手順書になっており、「どこを押すか分からず固まる」という資料自身が挙げた不安を潰せていない</li>
+          <li><span class="snag">詰まり</span>：手順書の所要は約15分、枠は23分。<strong>8分の空白</strong>が発生し、早く終わった参加者が手持ち無沙汰になる</li>
+          <li><span class="snag">詰まり</span>：17:00に保健体育科が部活動で退室。ハンズオン途中のため、この教員は見せ場から先を一切受け取れていない</li>
+          <li><span class="good">良かった</span>：「赤い付箋を立てる」ヘルプサイン方式は中学校でも機能。挙手しづらいベテラン層が使う</li>
+          <li><span class="good">良かった</span>：「入力ではなく出力を見て直す」から入る設計は正しい。成功体験が先に来る</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tl-row">
+      <div class="tl-time">0:57–1:00<small>台本 5分</small></div>
+      <div class="tl-body">
+        <h3>まとめ・安全・質疑 ― 破綻</h3>
+        <ul>
+          <li>押した分がここで吸収され、<strong>質疑が実質ゼロ</strong>。安全の説明も駆け足</li>
+          <li>「AIは下書き／最終責任は教員」という<strong>最も重要なメッセージが、最も時間のない場所に置かれている</strong></li>
+          <li>終了後、講師の周りに5名が残り12分の個別質問。内容は個人情報・生徒のAI利用・評価との関係 ― <strong>全員が聞くべき内容が、残れた人だけに伝わった</strong></li>
+          <li>アンケート（2分想定）は回収率が落ちる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h4>実況サマリ ― 症状と原因</h4>
+    <div class="scroller">
+    <table>
+      <thead><tr><th>症状</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr><td>不安を抱えたまま60分聞くことになる</td><td>安全・線引きの説明が最後に置かれている</td></tr>
+        <tr><td>教科によって当事者意識に大きな差</td><td>サンプルが小6社会の1教科分のみ</td></tr>
+        <tr><td>質疑が消滅する</td><td>前半のオーバーが全部最後に集まる構造</td></tr>
+        <tr><td>ハンズオンが宙に浮く</td><td>手順書15分 vs 枠23分、かつ画面写真が未貼付</td></tr>
+        <tr><td>見せ場以降が届かない参加者が出る</td><td>部活動による中座を織り込んでいない</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">03</span>出た疑問・質問と回答案</h2>
+  <p class="lede">発生した質問を分類し、その場で返せる回答をつけた。台本に組み込む前提の文面。</p>
+
+  <h3>A. 評価・評定・調査書 ― 最多かつ最重要</h3>
+  <div class="qa">
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q1</span><span>AIが作った所見をそのまま通知表に載せていいのですか。</span></div>
+      <div class="a"><p>載せません。AIが出すのは<strong>下書き</strong>です。事実の誤りや言い過ぎがないかを先生が確認し、その子らしい一文を足して仕上げるところまでが先生の仕事です。文責は必ず担任にあります。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q2</span><span>観点別評価、とくに「主体的に学習に取り組む態度」の判定にAIの分析を使っていいですか。</span></div>
+      <div class="a"><p><strong>使いません。</strong>評価の判断は先生の専門的判断が根拠です。AIが手伝えるのは「その子が学期中に何を書いていたかを漏れなく思い出す」ところまでで、A・B・Cを決めるのはAIではありません。<strong>判断材料の整理と、判断そのものを分けてください。</strong></p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q3</span><span>調査書（内申書）には使えますか。</span></div>
+      <div class="a"><p><strong>使いません。</strong>調査書は進路に直結し、開示の対象にもなります。本研修で扱うのは通知表の所見欄の下書きまでです。この線引きは校内で明文化することを勧めます。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q4</span><span>振り返りをうまく書ける生徒が有利になりませんか。書くのが苦手な子が不利になりませんか。</span></div>
+      <div class="a"><p>重要な指摘です。振り返りは<strong>材料の一つ</strong>であって、それだけで評価はしません。提出物・実技・授業中の観察と必ず併用してください。むしろ、書く量が少ない生徒にAIが深掘りの質問を返して記述を引き出す使い方（ポイント②）が、その差を埋める方向に働きます。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q5</span><span>保護者に「これはAIが書いたのか」と聞かれたらどう答えますか。</span></div>
+      <div class="a"><p>「所見は担任が生徒の記録を確認して書いています。作成の過程で校内で認められた支援ツールを使っています」と説明できる状態にしておきます。<strong>この回答文言は管理職とそろえてください。</strong>支援員が個別に答えを作る話ではありません。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q6</span><span>学年や教科でバラバラに使うと不公平になりませんか。</span></div>
+      <div class="a"><p>なります。<strong>使う／使わないの判断は個人ではなく学年会・教務でそろえてください。</strong>研修は「使える状態にする」までで、運用ルールは学校が決めます。</p></div>
+    </div>
+  </div>
+
+  <h3>B. 生徒のAI利用 ― 中学校固有、必ず出る</h3>
+  <div class="qa">
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q7</span><span>生徒が振り返りをAIに書かせていたら、AIがAIの文章を読んで所見を作ることになりませんか。</span></div>
+      <div class="a"><p>中学校では現実に起こります。対策は3つ。①振り返りは<strong>授業内・画面配信下</strong>で書かせる ②字数ではなく「今日の自分の考えがどう変わったか」など<strong>その子にしか書けない設問</strong>にする ③生成AIの利用は ClassCloud 内の機能に限定し、<strong>ログが残る形</strong>にする。技術で完全には防げないので、設問設計で防ぎます。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q8</span><span>生徒用のAIは何年生から使わせていいのですか。</span></div>
+      <div class="a"><p>自治体のガイドラインと校内ルールが先です。<strong>支援員は即答しません。</strong>保護者への周知と同意の要否を含めて、管理職・情報担当と確認してから運用を始めてください。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q9</span><span>AIが生徒に不適切な返答をしたら、誰の責任になりますか。</span></div>
+      <div class="a"><p>まずログを確認できる導線を用意し、生徒からの申告ルートを事前に生徒指導部と共有しておきます。<strong>「起きない」前提ではなく「起きたらこう動く」を先に決める</strong>のが実務です。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q10</span><span>振り返りに悩みや家庭のことを書く生徒が出たらどうしますか。</span></div>
+      <div class="a"><p>中学校では必ず起こります。要配慮情報を見つけたときの流れ（担任→学年主任→教育相談・SC）を<strong>研修とは別に、生徒指導部で先に決めてください。</strong>担任が一人で抱えないことが目的です。「心の空模様」機能も同じ扱いです。</p></div>
+    </div>
+  </div>
+
+  <h3>C. 個人情報・データの扱い</h3>
+  <div class="qa">
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q11</span><span>生徒の振り返りはどこに保存され、AIの学習に使われますか。</span></div>
+      <div class="a"><p><strong>その場で答えず持ち帰ります。</strong>契約内容と仕様の確認が必要です。今日の実演はすべてダミーデータです。次回の巡回までに、事業者の資料をもとに文書で回答します。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q12</span><span>卒業後のデータはどうなりますか。保存期間は。</span></div>
+      <div class="a"><p>Q11と同じく持ち帰り事項です。学校の文書保存規程との整合も必要になります。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q13</span><span>開示請求されたら、AIの生成ログも開示対象になりますか。</span></div>
+      <div class="a"><p>学校の判断ではなく設置者（教育委員会）の判断領域です。<strong>この質問が出たこと自体を管理職に上げてください。</strong></p></div>
+    </div>
+  </div>
+
+  <h3>D. 運用・時間</h3>
+  <div class="qa">
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q14</span><span>50分授業で振り返りの時間が取れません。</span></div>
+      <div class="a"><p>毎時間書かせる必要はありません。<strong>単元末だけ、あるいは週1回</strong>でも蓄積は成立します。実技教科なら「1単元1回」で十分です。「毎回やらないと意味がない」と受け取られると導入が止まるので、ここは緩めて伝えます。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q15</span><span>教科担任と担任で、見る画面は違うのですか。</span></div>
+      <div class="a"><p>実質的に用途が違います。<strong>教科担任は「担当クラスの学習のつまずき傾向」、担任は「学級の様子と所見の材料」</strong>として見ます。同じ機能ですが入口が別なので、研修でも分けて説明すべきです。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q16</span><span>今から始めて、学期末の所見に間に合いますか。</span></div>
+      <div class="a">
+        <p><strong>蓄積がなければ所見は生成できません。</strong>逆算するとこうなります。</p>
+        <div class="scroller">
+        <table>
+          <thead><tr><th>通知表を書き始める時期</th><th>振り返りを溜め始める期限</th><th>必要な蓄積</th></tr></thead>
+          <tbody>
+            <tr><td class="num">12月上旬</td><td><strong>10月中に開始</strong></td><td>1教科あたり最低6〜8回分</td></tr>
+            <tr><td class="num">3月上旬</td><td>1月中に開始</td><td>同上</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>「今日から1単元分」始めれば次の学期末には確実に使えます。今学期に無理に間に合わせようとしないでください。</p>
+      </div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q17</span><span>不登校の生徒にも使えますか。</span></div>
+      <div class="a"><p>ここは中学校で最も価値が出る使い方の一つです。教室に来られない生徒が家庭から振り返りを書ければ、<strong>教員との接点と学習の記録が同時に残ります。</strong>ただし配信範囲と家庭の通信環境の確認が先です。</p></div>
+    </div>
+  </div>
+
+  <h3>E. 操作・技術</h3>
+  <div class="qa">
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q18</span><span>私の画面だけメニューが違うのですが。</span></div>
+      <div class="a"><p>権限（管理者・一般教員）で表示が変わります。あわてず手を止めて呼んでください。手順書の「違う画面が出たら」欄で対応します。</p></div>
+    </div>
+    <div class="qa-item">
+      <div class="q"><span class="tag">Q19</span><span>生成が遅い／エラーになりました。</span></div>
+      <div class="a"><p>リロードして再実行してください。<strong>失敗し得ることは先に伝えておきます</strong>（そのほうが信頼されます）。回線が不安な会場では、生成の瞬間だけ録画に差し替えます。</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">04</span>要点のまとめ方</h2>
+  <p class="lede">依頼にあった論点なので独立して扱う。研修の質は「何を話したか」ではなく「翌日に何が残ったか」で決まる。</p>
+
+  <h4>現状の課題</h4>
+  <ul>
+    <li><strong>持ち帰り資料が2種類あり、内容が別物。</strong><code>ハンズオン手順書</code>（所見ドラフトの操作6ステップ）と <code>配布用まとめ</code>（教材配布・AIくらすけ・所見AI／45〜50分構成）が同じフォルダに同居している。後者は60分研修の内容と一致していない。両方配ると「今日どっちを聞いたのか」が分からなくなる</li>
+    <li><strong>60分キットに「要点1枚」が存在しない。</strong>まとめのキーワードは「ためる・返す・見取る・所見にする・安全に使う」の5語。5つは翌日に残らない。<code>配布用まとめ</code>側にある「この3点だけ覚えて帰る」という枠組みのほうが優れているのに、60分キットに継承されていない</li>
+    <li><strong>書かせる時間がない。</strong><code>配布用まとめ</code>末尾に「メモ（自分のクラスで試したいこと・質問）」欄があるが、台本にこの欄を書かせる時間が組まれていない。欄はあるのに空欄のまま持ち帰られる</li>
+    <li><strong>教科担任と担任で持ち帰るものが違うのに、まとめが1種類</strong></li>
+  </ul>
+
+  <h4>改善案 ― まとめの型を3層にする</h4>
+  <div class="scroller">
+  <table>
+    <thead><tr><th>層</th><th>中身</th><th>置き場所</th></tr></thead>
+    <tbody>
+      <tr><td><strong>覚えて帰る（3つ）</strong></td><td>標語レベル。何も見ずに言える</td><td>まとめスライド・A4の上部</td></tr>
+      <tr><td><strong>手元で見返す</strong></td><td>操作の6ステップ＋画面写真</td><td>A4の裏面</td></tr>
+      <tr><td><strong>明日やる（1つ）</strong></td><td>参加者が<strong>その場で自分で書く</strong></td><td>A4の右下・記入欄</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>中学校版「この3点だけ」案 ― 差し替え用</h4>
+  <div class="three">
+    <div class="three-item">
+      <span class="k">① ためる</span>
+      <p>特別な入力はいりません。単元末の振り返りを ClassCloud で書かせるだけ。週1回でも溜まります。</p>
+    </div>
+    <div class="three-item">
+      <span class="k">② 返す</span>
+      <p>書いた直後にAIが深掘りの質問を返します。記述が少ない生徒ほど効きます。</p>
+    </div>
+    <div class="three-item">
+      <span class="k">③ 下書きにする</span>
+      <p>溜まった振り返りから通知表の所見の<strong>下書き</strong>が出ます。<strong>評定と調査書には使いません。</strong>仕上げと文責は先生です。</p>
+    </div>
+  </div>
+  <p>「安全に使う」を独立項目にせず<strong>③の中に埋め込む</strong>のが要点。5語を3語に減らしつつ、最重要のメッセージを最頻出の項目に同居させると落ちない。</p>
+
+  <h4>「明日やること」欄 ― 研修中に2分取って記入させる</h4>
+  <div class="memo">私の教科（        ）で、次の単元（        ）の
+
+  □ 単元末に振り返りを1回書かせる
+  □ 溜まった振り返りに①返すを使ってみる
+  □ 学年会で「評定には使わない」を確認する</div>
+</section>
+
+<section>
+  <h2><span class="num">05</span>気づいた点 ― このまま活かすべき設計</h2>
+  <p class="lede">中学校でもそのまま強かった要素。改変しないこと。</p>
+  <ul>
+    <li><strong>ゴール宣言＋10秒フック</strong> ― 冒頭で「所見ドラフトが出る画面」を一瞬だけ見せる構成。中学校でも掴みとして機能する</li>
+    <li><strong>「同じAIが子に合わせて返し方を変える」の3枚並べ</strong> ― 概念説明を一切せずに理解させる。研修全体で最も効率のよい5分</li>
+    <li><strong>「入力」ではなく「出力を見て直す」から入るハンズオン設計</strong> ― 成功体験が先に来るため、ICTが苦手な層が脱落しない</li>
+    <li><strong>赤い付箋のヘルプサイン方式</strong> ― 挙手をためらうベテラン層が実際に使う</li>
+    <li><strong>「間違えても壊れません」の事前明言</strong></li>
+    <li><strong>2人1組（得意×苦手）の着席</strong> ― 中学校では<strong>教科をまたいでペアにする</strong>とさらに効く（同教科だと雑談になる）</li>
+    <li><strong>プランB表</strong> ― 想定トラブルと代替案の対応表がある研修資料は稀。完成度が高い</li>
+    <li><strong>保険録画</strong> ― AI生成の瞬間だけ録画に差し替えるハイブリッド案は実務的で優れている</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="num">06</span>改善点</h2>
+
+  <div class="prio-head"><span class="chip chip-p0">P0</span><span class="label">中学校で実施する前に必ず対応</span></div>
+  <div class="scroller">
+  <table>
+    <thead><tr><th class="num">#</th><th>項目</th><th>対応</th></tr></thead>
+    <tbody>
+      <tr><td class="num">P0-1</td><td>ハンズオン手順書の画面写真が未貼付</td><td>「（写真をはるスペース）」6か所に実画面を貼り、押す場所を赤丸で囲む。<strong>これが無いと手順書として機能しない</strong></td></tr>
+      <tr><td class="num">P0-2</td><td>「児童」→「生徒」への全文置換</td><td>計画書・台本・手順書・AI出力例・スライドの全ファイル</td></tr>
+      <tr><td class="num">P0-3</td><td>評価・評定・調査書の線引きスライドを追加し冒頭へ</td><td>現在は0:55の最後。<strong>0:05〜0:10へ前倒し。</strong>「使わない場所」を先に言い切ると以降の集中が上がる</td></tr>
+      <tr><td class="num">P0-4</td><td>費用対効果の数字を中学校規模に差し替え</td><td>「1人30分×30人＝15時間」→ 担任版・教科担任版の2本立て</td></tr>
+      <tr><td class="num">P0-5</td><td>蓄積ゼロ問題への回答（逆算スケジュール）を追加</td><td>「今から始めて間に合うか」は必ず出る。Q16 の表をスライド化</td></tr>
+      <tr><td class="num">P0-6</td><td>配布資料の重複解消</td><td><code>配布用まとめ</code>（45〜50分・別内容）と<code>ハンズオン手順書</code>のどちらを配るか決める。両方配らない</td></tr>
+      <tr><td class="num">P0-7</td><td>質疑を5分→10分に拡大</td><td>前半のオーバーが最後に集中して質疑が消える構造。時間を確保するか、質問を事前フォームで回収する</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="prio-head"><span class="chip chip-p1">P1</span><span class="label">中学校版として整えるべき</span></div>
+  <div class="scroller">
+  <table>
+    <thead><tr><th class="num">#</th><th>項目</th><th>対応</th></tr></thead>
+    <tbody>
+      <tr><td class="num">P1-1</td><td>担任トラック／教科担任トラックの分岐</td><td>ポイント③で、担任＝学級の様子、教科担任＝担当クラスの学習傾向、と入口を分けて説明する</td></tr>
+      <tr><td class="num">P1-2</td><td>サンプルデータの中学校版を作成</td><td>最優先は中2社会（明治維新／現行データをほぼ流用可）、次に理科・英語。仮名6名の「型」（発展・暗記・記述少・つまずき・現代接続・変化）の設計は秀逸なので<strong>構造は流用し、教科と学齢だけ差し替える</strong></td></tr>
+      <tr><td class="num">P1-3</td><td>録画とアーカイブを前提化</td><td>部活動で中座・欠席する教員が必ず出る。3〜5分のマニュアル動画＋当日録画を校内ポータルに</td></tr>
+      <tr><td class="num">P1-4</td><td>生徒のAI利用に関するQ&amp;Aを台本に組み込む</td><td>Q7〜Q10。中学校では確実に出るので、聞かれてから考えない</td></tr>
+      <tr><td class="num">P1-5</td><td>ハンズオンの枠と実所要を一致させる</td><td>枠23分・手順書15分の8分ギャップ。枠を15分に詰めて、浮いた時間を質疑と「明日やること」記入へ</td></tr>
+      <tr><td class="num">P1-6</td><td>開始時刻の見直し</td><td>職員会議直後は押す。会議とは別日にするか、開始5分のバッファを最初から計画に入れる</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="prio-head"><span class="chip chip-p2">P2</span><span class="label">次回以降の質を上げる</span></div>
+  <div class="scroller">
+  <table>
+    <thead><tr><th class="num">#</th><th>項目</th><th>対応</th></tr></thead>
+    <tbody>
+      <tr><td class="num">P2-1</td><td>「心の空模様」は生徒指導・教育相談の文脈で紹介</td><td>中学校では学級経営より<strong>SOSの早期発見</strong>の文脈のほうが刺さる。ただし要配慮情報の扱いとセットでしか出さない</td></tr>
+      <tr><td class="num">P2-2</td><td>事後フォローの明示</td><td>巡回日と、希望者向け15分の個別枠。研修当日に全員を到達させようとしない</td></tr>
+      <tr><td class="num">P2-3</td><td>アンケートを研修中にQRで回答</td><td>「最後に2分」では回収率が落ちる。ハンズオン終了直後に投影して回答させる</td></tr>
+      <tr><td class="num">P2-4</td><td>不登校生徒への活用を1スライド追加</td><td>中学校で最も価値が出る使い方の一つだが、現行資料に記述がない</td></tr>
+      <tr><td class="num">P2-5</td><td>持ち帰り課題を教科別に言い換える</td><td>「所見を1人ぶん下書き」は担任向け。教科担任には「担当1クラスの傾向を見る」に置き換える</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">07</span>中学校版タイムテーブル案</h2>
+  <p class="lede">P0／P1 を反映した60分の差し替え案。網かけが変更箇所。</p>
+  <div class="scroller">
+  <table>
+    <thead><tr><th class="num">時間</th><th>パート</th><th>内容</th><th>変更点</th></tr></thead>
+    <tbody>
+      <tr><td class="num">0:00–0:05</td><td>導入</td><td>ゴール宣言＋10秒フック</td><td>短縮（5分）</td></tr>
+      <tr class="changed"><td class="num">0:05–0:10</td><td><strong>線引き</strong></td><td><strong>使う場所／使わない場所（通知表所見◯・評定×・調査書×）</strong></td><td>最後から前倒し</td></tr>
+      <tr><td class="num">0:10–0:17</td><td>② 返す</td><td>薄い振り返りへのAI返答デモ＋1分体験</td><td>サンプルを中学校版に</td></tr>
+      <tr class="changed"><td class="num">0:17–0:25</td><td>③ 見取る</td><td><strong>担任の入口／教科担任の入口を分けて提示</strong></td><td>分岐を追加</td></tr>
+      <tr><td class="num">0:25–0:33</td><td>④ 所見にする</td><td>所見ドラフト生成（見せ場）</td><td>数字を中学校規模に</td></tr>
+      <tr><td class="num">0:33–0:48</td><td>ハンズオン</td><td>出力を見て直す（15分）</td><td>枠を実所要に一致</td></tr>
+      <tr class="changed"><td class="num">0:48–0:52</td><td><strong>逆算＋記入</strong></td><td><strong>いつ始めれば学期末に間に合うか／「明日やること」を1つ書く</strong></td><td>新設</td></tr>
+      <tr><td class="num">0:52–0:57</td><td>まとめ</td><td><strong>この3点だけ</strong>（ためる・返す・下書きにする）</td><td>5語→3語</td></tr>
+      <tr><td class="num">0:57–1:00</td><td>質疑</td><td>＋アンケートQR</td><td>実質の質疑時間を確保</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout">
+    <h4>45分短縮版 ― 部活動を考慮する場合</h4>
+    <p>②返す（7分）と④所見にする（8分）を残し、③見取るをデモのみ4分、ハンズオンを10分に圧縮。線引き5分・逆算3分・まとめ3分・質疑5分は<strong>削らない</strong>。削るのは体験時間で、安全と逆算は削らないのが原則。</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">08</span>実施前チェックリスト</h2>
+  <div class="checks">
+    <div class="check-grp">
+      <h4>資料 ― 前日まで</h4>
+      <ul>
+        <li>手順書の画面写真6か所を貼付、押す場所を赤丸で囲んだ</li>
+        <li>全ファイルの「児童」を「生徒」に置換した</li>
+        <li>線引きスライド（所見◯／評定×／調査書×）を作成し、冒頭に配置した</li>
+        <li>逆算スケジュールのスライドを作成した</li>
+        <li>数字を中学校規模（担任版・教科担任版）に差し替えた</li>
+        <li>配る資料を1種類に決めた</li>
+        <li>「明日やること」記入欄を入れたA4を人数分印刷した</li>
+      </ul>
+    </div>
+    <div class="check-grp">
+      <h4>関係者との事前合意 ― 1週間前まで</h4>
+      <ul>
+        <li>管理職と「保護者に聞かれたときの説明文言」をそろえた</li>
+        <li>教務主任と「評定・調査書には使わない」を確認した</li>
+        <li>生徒指導部と「振り返りに要配慮情報が書かれた場合の流れ」を確認した</li>
+        <li>情報担当と、持ち帰りになる質問（保存先・AI学習・保存期間・開示）の回答期限を決めた</li>
+      </ul>
+    </div>
+    <div class="check-grp">
+      <h4>当日 ― 開始前</h4>
+      <ul>
+        <li>全端末をログイン済み・該当画面まで開いた</li>
+        <li>通知・ポップアップを全オフ、ブラウザ拡大125〜150%、カーソル拡大</li>
+        <li>最後列から画面が読めるか実地確認した</li>
+        <li>AI生成の待ち時間を実測し、5秒超なら台本に「ここで少し待ちます」を入れた</li>
+        <li>保険録画（生成の瞬間）を再生できる状態にした</li>
+        <li>2人1組の座席を教科をまたいで組んだ</li>
+        <li>途中退室者（部活動）の人数を把握し、録画の案内を用意した</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">09</span>総括</h2>
+  <p><strong>このキットの土台は良い。</strong>ゴール宣言、10秒フック、3枚並べ、出力から入るハンズオン、赤い付箋、プランB表 ― 研修設計として質が高く、中学校でもそのまま通用する。</p>
+  <p>問題は<strong>中身ではなく前提</strong>にある。小学校・学級担任制・所見という3つの前提の上に組まれているため、中学校に持ち込むと、教科担任制・評定と調査書・部活動という3つの現実とすれ違う。</p>
+  <p>修正の要点は3つに集約できる。</p>
+  <div class="three">
+    <div class="three-item">
+      <span class="k">安全と線引きを冒頭へ動かす</span>
+      <p>中学校では不安を先に消さないと、その後の60分が頭に入らない。最後に置くのが最も効率が悪い。</p>
+    </div>
+    <div class="three-item">
+      <span class="k">サンプルと数字を中学校の実体に</span>
+      <p>構造は流用でよく、差し替えるのは教科・学齢・人数だけ。作り直しではない。</p>
+    </div>
+    <div class="three-item">
+      <span class="k">いつ使えるようになるかを示す</span>
+      <p>現行資料で最も欠けている一枚であり、実施後の定着を左右する。</p>
+    </div>
+  </div>
+  <p>要点のまとめ方については、<code>配布用まとめ</code>側にある「<strong>この3点だけ覚えて帰る</strong>」という枠組みを60分キットに移植し、5語を3語に減らしたうえで「明日やること1つ」を<strong>その場で書かせる</strong>のが最短の改善になる。</p>
+</section>
+
+<footer>
+  ClassCloud 校内研修 ／ 中学校実施シミュレーション ／ 2026-08-16 ／ ICT支援員
+</footer>
+
+</div>
