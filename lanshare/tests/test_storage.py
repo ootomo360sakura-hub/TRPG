@@ -1,0 +1,122 @@
+"""共有フォルダ操作の検証。"""
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from lanshare.storage import BACKUP_DIR, TRASH_DIR, Store, StorageError, sanitize_filename
+
+
+class SanitizeTest(unittest.TestCase):
+    def test_strips_directories(self):
+        self.assertEqual(sanitize_filename("../../etc/passwd"), "passwd")
+        self.assertEqual(sanitize_filename(r"C:\Users\me\写真.HEIC"), "写真.HEIC")
+        self.assertEqual(sanitize_filename("a/b/c.txt"), "c.txt")
+
+    def test_windows_forbidden_characters(self):
+        self.assertEqual(sanitize_filename('a<b>c:d"e|f?g*h.txt'), "a_b_c_d_e_f_g_h.txt")
+        self.assertEqual(sanitize_filename("bell\x07.txt"), "bell_.txt")
+
+    def test_windows_reserved_names(self):
+        self.assertEqual(sanitize_filename("con.txt"), "_con.txt")
+        self.assertEqual(sanitize_filename("NUL"), "_NUL")
+
+    def test_trailing_dots_and_spaces(self):
+        self.assertEqual(sanitize_filename("report.  "), "report")
+        self.assertEqual(sanitize_filename("  ..  "), "file")
+        self.assertEqual(sanitize_filename(""), "file")
+
+    def test_length_limit_keeps_extension(self):
+        name = sanitize_filename("x" * 300 + ".jpg")
+        self.assertLessEqual(len(name), 180)
+        self.assertTrue(name.endswith(".jpg"))
+
+
+class StoreTest(unittest.TestCase):
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+
+    def tearDown(self):
+        self._temp.cleanup()
+
+    def test_save_and_list(self):
+        store = Store(self.root)
+        result = store.save("メモ.txt", [b"abc", b"de"])
+        self.assertEqual(result, {"name": "メモ.txt", "size": 5, "backup": None})
+        self.assertEqual((self.root / "メモ.txt").read_bytes(), b"abcde")
+        self.assertEqual([f.name for f in store.list_files()], ["メモ.txt"])
+
+    def test_conflict_rename(self):
+        store = Store(self.root, on_conflict="rename")
+        store.save("a.txt", [b"1"])
+        second = store.save("a.txt", [b"2"])
+        self.assertEqual(second["name"], "a (1).txt")
+        self.assertEqual((self.root / "a.txt").read_bytes(), b"1")
+
+    def test_conflict_backup_keeps_previous_version(self):
+        store = Store(self.root, on_conflict="backup")
+        store.save("a.txt", [b"old"])
+        result = store.save("a.txt", [b"new"])
+        self.assertEqual((self.root / "a.txt").read_bytes(), b"new")
+        backups = list((self.root / BACKUP_DIR).iterdir())
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), b"old")
+        self.assertEqual(result["backup"], f"{BACKUP_DIR}/{backups[0].name}")
+
+    def test_delete_moves_to_trash(self):
+        store = Store(self.root)
+        store.save("a.txt", [b"x"])
+        result = store.delete("a.txt")
+        self.assertFalse((self.root / "a.txt").exists())
+        trashed = self.root / result["trashed"]
+        self.assertTrue(trashed.is_file())
+        self.assertTrue(str(trashed).startswith(str(self.root / TRASH_DIR)))
+
+    def test_hard_delete(self):
+        store = Store(self.root, hard_delete=True)
+        store.save("a.txt", [b"x"])
+        self.assertIsNone(store.delete("a.txt")["trashed"])
+        self.assertFalse((self.root / TRASH_DIR).exists())
+
+    def test_delete_missing(self):
+        with self.assertRaises(StorageError):
+            Store(self.root).delete("nope.txt")
+
+    def test_resolve_rejects_traversal(self):
+        store = Store(self.root)
+        for name in ("../x", "a/b", r"a\b", "", ".", ".."):
+            with self.subTest(name=name), self.assertRaises(StorageError):
+                store.resolve(name)
+
+    def test_max_bytes_aborts_and_cleans_up(self):
+        store = Store(self.root)
+        with self.assertRaises(StorageError):
+            store.save("big.bin", [b"x" * 100, b"y" * 100], max_bytes=150)
+        self.assertEqual(list(store.list_files()), [])
+        self.assertEqual([p.name for p in self.root.iterdir() if p.name.endswith(".lanshare-part")], [])
+
+    def test_listing_hides_internal_entries(self):
+        store = Store(self.root)
+        store.save("a.txt", [b"x"])
+        store.save("b.txt", [b"y"])
+        store.delete("b.txt")
+        store.state_dir()
+        names = [f.name for f in store.list_files()]
+        self.assertEqual(names, ["a.txt"])
+
+    def test_iter_range(self):
+        store = Store(self.root)
+        store.save("a.bin", [bytes(range(10))])
+        self.assertEqual(b"".join(store.iter_range("a.bin", 2, 5)), bytes(range(2, 6)))
+        self.assertEqual(b"".join(store.iter_range("a.bin", 0, 9, chunk_size=3)), bytes(range(10)))
+
+    def test_sanitizes_on_save(self):
+        store = Store(self.root)
+        result = store.save("../../evil.txt", [b"x"])
+        self.assertEqual(result["name"], "evil.txt")
+        self.assertTrue((self.root / "evil.txt").is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

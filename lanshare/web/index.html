@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LAN共有">
+<meta name="theme-color" content="#0b1220">
+<title>LANファイル共有</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="login" class="view center hidden">
+  <form id="login-form" class="card login-card">
+    <h1>LANファイル共有</h1>
+    <p class="muted">PCの画面に表示されている6桁のPINを入力してください。</p>
+    <input id="pin" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code"
+           maxlength="6" placeholder="000000" aria-label="PIN">
+    <button type="submit" class="primary">接続する</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" class="view hidden">
+  <header class="bar">
+    <div class="bar-title">
+      <strong>LANファイル共有</strong>
+      <span id="root-label" class="muted"></span>
+    </div>
+    <button id="logout" class="ghost" type="button">切断</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="files" role="tab">ファイル</button>
+    <button class="tab" data-tab="text" role="tab">テキスト</button>
+    <button class="tab" data-tab="connect" role="tab">接続情報</button>
+  </nav>
+
+  <main>
+    <section id="tab-files" class="panel">
+      <div id="drop" class="dropzone">
+        <p class="drop-title">ファイルをドラッグ&amp;ドロップ</p>
+        <p class="muted">またはボタンから選択(複数可・写真/動画もそのまま送れます)</p>
+        <div class="row">
+          <button id="pick" class="primary" type="button">ファイルを選ぶ</button>
+        </div>
+        <input id="file-input" type="file" multiple hidden>
+      </div>
+
+      <ul id="uploads" class="uploads"></ul>
+
+      <div class="list-head">
+        <h2>共有中のファイル <span id="file-count" class="muted"></span></h2>
+        <button id="refresh" class="ghost" type="button">更新</button>
+      </div>
+      <ul id="files" class="files"></ul>
+      <p id="files-empty" class="muted empty hidden">まだファイルがありません。</p>
+    </section>
+
+    <section id="tab-text" class="panel hidden">
+      <form id="clip-form" class="card">
+        <label for="clip-text">テキストを共有(URLやメモの受け渡しに)</label>
+        <textarea id="clip-text" rows="4" placeholder="ここに貼り付けて送信"></textarea>
+        <button type="submit" class="primary">送信</button>
+      </form>
+      <ul id="clips" class="clips"></ul>
+      <p id="clips-empty" class="muted empty hidden">共有テキストはまだありません。</p>
+    </section>
+
+    <section id="tab-connect" class="panel hidden">
+      <div class="card center-text">
+        <p class="muted">iPhoneのカメラでこのQRを読み取ると、PIN入力なしで開けます。</p>
+        <img id="qr" class="qr" alt="接続用QRコード">
+        <p id="urls" class="urls"></p>
+        <p class="muted small">同じWi-Fi(ルーター)に接続している必要があります。</p>
+      </div>
+      <div class="card">
+        <h2>保存先</h2>
+        <p id="root-path" class="mono small"></p>
+        <p id="policy" class="muted small"></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

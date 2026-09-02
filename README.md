@@ -33,6 +33,7 @@ Claude Codeに「漫画を作って」と頼むとこの手順で作成される
 | `data/layouts.json` | ボールトからコンパイルしたコマ割り定義(自動生成) |
 | `tools/` | パイプラインスクリプト |
 | `episodes/` | エピソードごとの台本・コマ画像・完成ページ |
+| `lanshare/` | LANファイル共有アプリ(Windows PC ⇄ iPhone)。詳細は [`lanshare/README.md`](lanshare/README.md) |
 
 ## ツール
 
@@ -52,6 +53,20 @@ python3 tools/compose_page.py episodes/ep001  # 台本+コマ画像 → page_1.p
 2. **NotebookLM**: `tools/export_notebooklm.py` の出力(`notebooklm/`)を
    NotebookLMの「ソースを追加」で取り込み、コマ割り研究・要約・質問に使う。
    得られた知見は `vault/知識/` に還元する(NotebookLMは公開APIがないため手動取り込み)
+
+## LANファイル共有アプリ(`lanshare/`)
+
+同じWi-Fi内のWindows PCとiPhoneでファイル・テキストをやり取りするためのアプリも
+このリポジトリに同居している(漫画パイプラインとは独立)。
+コマ画像や完成ページをスマホへ渡す・スマホで撮った資料をPCへ送る、といった用途に使う。
+
+```bat
+python -m lanshare              :: ./shared を共有してサーバ起動(標準ライブラリのみ)
+```
+
+起動するとコンソールに接続先URLとPIN、QRコードが表示される。
+iPhoneのカメラでQRを読み取ればSafariで開ける。
+オプションやWindowsファイアウォールの設定は **[`lanshare/README.md`](lanshare/README.md)** を参照。
 
 ## 補足
 

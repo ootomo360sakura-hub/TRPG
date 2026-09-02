@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# LANファイル共有アプリの既定の共有フォルダ
+shared/
