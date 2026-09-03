@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 MAX_CLIPS = 100
-MAX_TEXT_LENGTH = 8000
+MAX_TEXT_LENGTH = 200_000
 
 
 class ClipStore:
@@ -44,7 +44,7 @@ class ClipStore:
         if not text:
             raise ValueError("テキストが空です")
         if len(text) > MAX_TEXT_LENGTH:
-            raise ValueError(f"テキストが長すぎます(上限{MAX_TEXT_LENGTH}文字)")
+            raise ValueError(f"テキストが長すぎます(上限{MAX_TEXT_LENGTH:,}文字)")
         clip = {
             "id": f"{time.time_ns():x}",
             "text": text,

@@ -18,7 +18,6 @@ class ServerConfig:
     pin: str | None = None
     require_auth: bool = True
     allow_any_client: bool = False
-    max_upload_bytes: int | None = None
     on_conflict: str = "rename"
     hard_delete: bool = False
     session_ttl: int = DEFAULT_SESSION_TTL

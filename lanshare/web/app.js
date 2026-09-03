@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const HEADERS = { "X-LanShare": "1" };
 
-let info = { auth: false, root: "", hardDelete: false, onConflict: "rename", urls: [], maxUpload: null };
+let info = { auth: false, root: "", hardDelete: false, onConflict: "rename", urls: [] };
 let view = "login";        // login / setup / app
 let lastRevision = null;   // 共有フォルダの更新回数(変わったら一覧を読み直す)
 let pollTimer = null;
@@ -240,9 +240,10 @@ async function loadFiles() {
   const data = await api("/api/files");
   const list = $("files");
   list.innerHTML = "";
+  const free = data.freeSpace ? `空き ${formatSize(data.freeSpace)}` : "";
   $("file-count").textContent = data.files.length
-    ? `(${data.files.length}件 / ${formatSize(data.totalSize)})`
-    : "";
+    ? `(${data.files.length}件 / ${formatSize(data.totalSize)}${free ? " ・ " + free : ""})`
+    : free && `(${free})`;
   $("files-empty").classList.toggle("hidden", data.files.length > 0);
 
   for (const file of data.files) {
@@ -310,10 +311,6 @@ let uploading = false;
 
 function enqueue(files) {
   for (const file of files) {
-    if (info.maxUpload && file.size > info.maxUpload) {
-      toast(`${file.name} は上限(${formatSize(info.maxUpload)})を超えています`);
-      continue;
-    }
     const item = document.createElement("li");
     item.innerHTML =
       `<div class="upload-name"></div>` +

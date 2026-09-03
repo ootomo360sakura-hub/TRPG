@@ -1,6 +1,7 @@
 """共有フォルダの読み書き。
 
-安全側の既定として、
+受け取るファイルの種類とサイズに制限は設けない(上限はPCの空き容量とファイルシステム)。
+そのうえで安全側の既定として、
 * 受信ファイル名はWindowsで使える形に正規化し、共有フォルダ外へ出られないようにする
 * 同名ファイルは上書きせず別名保存(``--on-conflict backup`` なら日時付きバックアップを残す)
 * 削除はいきなり消さず ``_trash/日時/`` へ退避(``--hard-delete`` 指定時のみ即削除)
@@ -124,6 +125,13 @@ class Store:
     def total_size(self) -> int:
         return sum(info.size for info in self.list_files())
 
+    def free_space(self) -> int | None:
+        """共有フォルダのあるドライブの空き容量(バイト)。取得できなければNone。"""
+        try:
+            return shutil.disk_usage(self.root).free
+        except OSError:
+            return None
+
     # --- 保存 ---
 
     def _unique_name(self, name: str) -> str:
@@ -155,9 +163,10 @@ class Store:
         shutil.move(str(source), str(target))
         return target
 
-    def save(self, filename: str, chunks: Iterable[bytes], max_bytes: int | None = None) -> dict:
+    def save(self, filename: str, chunks: Iterable[bytes]) -> dict:
         """チャンク列をファイルとして保存し、結果の情報を返す。
 
+        ファイルの種類とサイズに制限は設けない(実際の上限はPCの空き容量)。
         同名ファイルがある場合は ``on_conflict`` に従って別名保存またはバックアップ退避。
         書き込みは一時ファイルへ行い、完了時にリネームする(中断時に壊れた本体を残さない)。
         """
@@ -168,8 +177,6 @@ class Store:
             with open(temp, "wb") as handle:
                 for chunk in chunks:
                     written += len(chunk)
-                    if max_bytes is not None and written > max_bytes:
-                        raise StorageError(f"ファイルが上限({max_bytes}バイト)を超えました")
                     handle.write(chunk)
         except BaseException:
             temp.unlink(missing_ok=True)

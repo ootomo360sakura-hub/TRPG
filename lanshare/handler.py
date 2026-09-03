@@ -9,13 +9,14 @@
 * GET  /api/status           接続中の端末と更新回数(セットアップ画面の待ち受け)
 * GET  /files/<name>         ダウンロード(Rangeリクエスト対応)
 * POST /api/login /logout    PIN認証
-* POST /api/upload           multipartアップロード(逐次書き込み)
+* POST /api/upload           multipartアップロード(逐次書き込み、種類・サイズの制限なし)
 * POST /api/delete           削除(既定はゴミ箱へ退避)
 * GET/POST /api/clips        テキスト共有
 """
 
 from __future__ import annotations
 
+import errno
 import json
 import mimetypes
 import os
@@ -37,7 +38,7 @@ from .state import DeviceRegistry, Revision
 from .storage import Store, StorageError
 
 WEB_DIR = Path(__file__).parent / "web"
-MAX_JSON_BYTES = 64 * 1024
+MAX_JSON_BYTES = 1024 * 1024  # テキスト共有の本文を通すための余裕。ファイル転送はこの制限を通らない
 STREAM_CHUNK = 256 * 1024
 
 
@@ -291,7 +292,6 @@ class LanShareHandler(BaseHTTPRequestHandler):
             "rootPath": str(self.context.store.root),
             "onConflict": config.on_conflict,
             "hardDelete": config.hard_delete,
-            "maxUpload": config.max_upload_bytes,
             "pin": config.pin if self.context.auth.enabled else None,
             "urls": self.context.share_urls(),
             "version": __version__,
@@ -301,7 +301,11 @@ class LanShareHandler(BaseHTTPRequestHandler):
         if not self._authenticated():
             return self._error(HTTPStatus.UNAUTHORIZED, "認証が必要です")
         files = [info.as_dict() for info in self.context.store.list_files()]
-        self._json({"files": files, "totalSize": sum(f["size"] for f in files)})
+        self._json({
+            "files": files,
+            "totalSize": sum(f["size"] for f in files),
+            "freeSpace": self.context.store.free_space(),
+        })
 
     def _api_status(self) -> None:
         """接続中の端末と共有フォルダの更新回数を返す(セットアップ画面の待ち受け用)。"""
@@ -359,11 +363,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
                 if not part.is_file:
                     part.drain()
                     continue
-                record = self.context.store.save(
-                    part.filename or "file",
-                    part.stream(),
-                    max_bytes=self.context.config.max_upload_bytes,
-                )
+                record = self.context.store.save(part.filename or "file", part.stream())
                 saved.append(record)
                 self.log_message("UPLOAD %s (%d bytes)", record["name"], record["size"])
         except (MultipartError, StorageError) as error:
@@ -373,6 +373,15 @@ class LanShareHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             self.log_message("UPLOAD中断(接続が切れました)")
             return
+        except OSError as error:
+            # 種類・サイズの制限は設けていないため、失敗するとすればディスク側の理由
+            self.close_connection = True
+            if error.errno == errno.ENOSPC:
+                message = "PCの空き容量が足りません。不要なファイルを整理してから再送してください"
+            else:
+                message = f"保存できませんでした({error.strerror or error})"
+            self.log_message("UPLOAD失敗 %s", message)
+            return self._error(HTTPStatus.INSUFFICIENT_STORAGE, message)
         if not saved:
             return self._error(HTTPStatus.BAD_REQUEST, "ファイルが含まれていません")
         self.context.revision.bump()

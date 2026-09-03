@@ -179,6 +179,45 @@ class UploadDownloadTest(ServerTestCase):
         self.assertEqual(payload["saved"][0]["size"], len(data))
         self.assertEqual((self.root / "写真 1.HEIC").read_bytes(), data)
 
+    def test_accepts_any_file_type(self):
+        """拡張子による制限は設けない。"""
+        files = [("app.exe", b"MZ\x90"), ("録画.MOV", b"\x00moov"), ("no_extension", b"x"),
+                 ("書庫.zip", b"PK\x03\x04"), ("メモ.txt", "日本語".encode())]
+        status, payload = self.upload_files(files)
+        self.assertEqual(status, 200)
+        self.assertEqual([f["name"] for f in payload["saved"]], [name for name, _ in files])
+
+    def test_upload_has_no_size_limit(self):
+        """1ファイル20MBを分割受信できる(上限を設けていないこと)。"""
+        data = bytes(range(256)) * 80000  # 約20MB
+        status, payload = self.upload_files([("big.bin", data)])
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["saved"][0]["size"], len(data))
+        self.assertEqual((self.root / "big.bin").stat().st_size, len(data))
+
+    def test_info_has_no_upload_limit_field(self):
+        self.assertNotIn("maxUpload", self.json_request("GET", "/api/info")[2])
+
+    def test_files_reports_free_space(self):
+        free = self.json_request("GET", "/api/files")[2]["freeSpace"]
+        self.assertIsInstance(free, int)
+        self.assertGreater(free, 0)
+
+    def test_disk_full_reports_clear_error(self):
+        import errno as errno_module
+
+        def full_disk(*args, **kwargs):
+            raise OSError(errno_module.ENOSPC, "No space left on device")
+
+        original = self.context.store.save
+        self.context.store.save = full_disk
+        try:
+            status, payload = self.upload_files([("a.txt", b"x")])
+        finally:
+            self.context.store.save = original
+        self.assertEqual(status, 507)
+        self.assertIn("空き容量", payload["error"])
+
     def test_upload_conflict_creates_new_name(self):
         self.upload_files([("a.txt", b"1")])
         _, payload = self.upload_files([("a.txt", b"2")])

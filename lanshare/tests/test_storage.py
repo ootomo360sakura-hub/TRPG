@@ -89,12 +89,31 @@ class StoreTest(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(StorageError):
                 store.resolve(name)
 
-    def test_max_bytes_aborts_and_cleans_up(self):
+    def test_no_size_or_type_limit(self):
+        """種類・サイズの上限は設けない(拡張子で弾かない・大きくても保存する)。"""
         store = Store(self.root)
-        with self.assertRaises(StorageError):
-            store.save("big.bin", [b"x" * 100, b"y" * 100], max_bytes=150)
+        for name in ("script.exe", "movie.MOV", "no_extension", "書庫.zip", "写真.HEIC"):
+            with self.subTest(name=name):
+                self.assertEqual(store.save(name, [b"x"])["name"], name)
+        chunks = (b"\xff" * 1024 * 1024 for _ in range(24))  # 24MBを逐次書き込み
+        self.assertEqual(store.save("large.bin", chunks)["size"], 24 * 1024 * 1024)
+
+    def test_write_failure_cleans_up_temp_file(self):
+        store = Store(self.root)
+
+        def failing_chunks():
+            yield b"partial"
+            raise OSError("disk full")
+
+        with self.assertRaises(OSError):
+            store.save("big.bin", failing_chunks())
         self.assertEqual(list(store.list_files()), [])
         self.assertEqual([p.name for p in self.root.iterdir() if p.name.endswith(".lanshare-part")], [])
+
+    def test_free_space(self):
+        free = Store(self.root).free_space()
+        self.assertIsInstance(free, int)
+        self.assertGreater(free, 0)
 
     def test_listing_hides_internal_entries(self):
         store = Store(self.root)

@@ -7,24 +7,12 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 from .auth import generate_pin
 from .config import DEFAULT_PORT, DEFAULT_ROOT, ServerConfig
 from .server import serve
-
-_SIZE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([KMGT]?)B?\s*$", re.IGNORECASE)
-_UNITS = {"": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3, "T": 1024 ** 4}
-
-
-def parse_size(text: str) -> int:
-    """``500M`` や ``2G`` のような指定をバイト数に変換する。"""
-    match = _SIZE.match(text)
-    if not match:
-        raise argparse.ArgumentTypeError(f"サイズの指定が不正です: {text}")
-    return int(float(match.group(1)) * _UNITS[match.group(2).upper()])
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
             "例:\n"
             "  python -m lanshare\n"
             "  python -m lanshare --dir \"D:\\共有\" --port 8080\n"
-            "  python -m lanshare --on-conflict backup --max-upload 2G\n"
+            "  python -m lanshare --on-conflict backup\n"
         ),
     )
     parser.add_argument("-d", "--dir", default=DEFAULT_ROOT, help="共有フォルダ(既定: ./shared)")
@@ -46,8 +34,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-auth", action="store_true", help="PIN認証を無効にする(信頼できるLANのみ)")
     parser.add_argument("--allow-any-client", action="store_true",
                         help="プライベートIP以外からの接続も許可する(通常は不要)")
-    parser.add_argument("--max-upload", type=parse_size, default=None,
-                        help="1ファイルあたりの上限サイズ(例: 2G)")
     parser.add_argument("--on-conflict", choices=["rename", "backup"], default="rename",
                         help="同名ファイルの扱い。rename=別名保存(既定) / backup=_backup へ日時つきで退避して上書き")
     parser.add_argument("--hard-delete", action="store_true",
@@ -80,7 +66,6 @@ def main(argv: list[str] | None = None) -> int:
         pin=None if args.no_auth else (args.pin or generate_pin()),
         require_auth=not args.no_auth,
         allow_any_client=args.allow_any_client,
-        max_upload_bytes=args.max_upload,
         on_conflict=args.on_conflict,
         hard_delete=args.hard_delete,
         session_ttl=max(1, args.session_ttl) * 3600,
