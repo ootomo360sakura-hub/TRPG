@@ -6,6 +6,7 @@
 * GET  /qr.png               接続用QRコード(要認証)
 * GET  /api/info             サーバ情報
 * GET  /api/files            ファイル一覧
+* GET  /api/status           接続中の端末と更新回数(セットアップ画面の待ち受け)
 * GET  /files/<name>         ダウンロード(Rangeリクエスト対応)
 * POST /api/login /logout    PIN認証
 * POST /api/upload           multipartアップロード(逐次書き込み)
@@ -32,6 +33,7 @@ from .clips import ClipStore
 from .config import ServerConfig
 from .multipart import MultipartError, MultipartParser, parse_boundary
 from .netinfo import is_local_client, lan_addresses
+from .state import DeviceRegistry, Revision
 from .storage import Store, StorageError
 
 WEB_DIR = Path(__file__).parent / "web"
@@ -47,6 +49,8 @@ class AppContext:
         self.store = Store(config.root, on_conflict=config.on_conflict, hard_delete=config.hard_delete)
         self.auth = AuthManager(config.pin, config.session_ttl, enabled=config.require_auth)
         self.clips = ClipStore(self.store.state_dir() / "clips.json")
+        self.devices = DeviceRegistry()
+        self.revision = Revision()
 
     def share_urls(self) -> list[str]:
         if self.config.extra_urls:
@@ -135,8 +139,20 @@ class LanShareHandler(BaseHTTPRequestHandler):
         morsel = cookie.get(SESSION_COOKIE)
         return morsel.value if morsel else None
 
+    def _device_token(self, token: str | None) -> str:
+        """端末を識別するキー。PIN認証なしの場合は接続元から組み立てる。"""
+        if token:
+            return token
+        return f"anon:{self._client()}|{self.headers.get('User-Agent', '')}"
+
     def _authenticated(self) -> bool:
-        return self.context.auth.is_valid(self._cookie_token())
+        token = self._cookie_token()
+        if not self.context.auth.is_valid(token):
+            return False
+        self.context.devices.touch(
+            self._device_token(token), self._client(), self.headers.get("User-Agent", "")
+        )
+        return True
 
     def _session_cookie(self, token: str) -> str:
         ttl = self.context.config.session_ttl
@@ -187,6 +203,8 @@ class LanShareHandler(BaseHTTPRequestHandler):
             return self._api_info()
         if path == "/api/files":
             return self._api_files()
+        if path == "/api/status":
+            return self._api_status()
         if path == "/api/clips":
             return self._api_clips()
         if path.startswith("/files/"):
@@ -274,6 +292,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
             "onConflict": config.on_conflict,
             "hardDelete": config.hard_delete,
             "maxUpload": config.max_upload_bytes,
+            "pin": config.pin if self.context.auth.enabled else None,
             "urls": self.context.share_urls(),
             "version": __version__,
         })
@@ -283,6 +302,22 @@ class LanShareHandler(BaseHTTPRequestHandler):
             return self._error(HTTPStatus.UNAUTHORIZED, "認証が必要です")
         files = [info.as_dict() for info in self.context.store.list_files()]
         self._json({"files": files, "totalSize": sum(f["size"] for f in files)})
+
+    def _api_status(self) -> None:
+        """接続中の端末と共有フォルダの更新回数を返す(セットアップ画面の待ち受け用)。"""
+        if not self._authenticated():
+            return self._error(HTTPStatus.UNAUTHORIZED, "認証が必要です")
+        token = self._device_token(self._cookie_token())
+        devices = self.context.devices.snapshot(token)
+        others = [device for device in devices if not device["self"] and device["online"]]
+        self._json({
+            "devices": devices,
+            "otherConnected": bool(others),
+            "mobileConnected": any(device["kind"] == "mobile" for device in others),
+            "latestDevice": others[-1]["name"] if others else None,
+            "revision": self.context.revision.value,
+            "now": time.time(),
+        })
 
     def _api_login(self) -> None:
         try:
@@ -301,7 +336,9 @@ class LanShareHandler(BaseHTTPRequestHandler):
         self._json({"ok": True}, headers={"Set-Cookie": self._session_cookie(token)})
 
     def _api_logout(self) -> None:
-        self.context.auth.revoke(self._cookie_token())
+        token = self._cookie_token()
+        self.context.devices.remove(self._device_token(token))
+        self.context.auth.revoke(token)
         expired = f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
         self._json({"ok": True}, headers={"Set-Cookie": expired})
 
@@ -338,6 +375,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
             return
         if not saved:
             return self._error(HTTPStatus.BAD_REQUEST, "ファイルが含まれていません")
+        self.context.revision.bump()
         self._json({"saved": saved})
 
     def _api_delete(self) -> None:
@@ -346,6 +384,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
             result = self.context.store.delete(str(payload.get("name", "")))
         except (ValueError, StorageError) as error:
             return self._error(HTTPStatus.BAD_REQUEST, str(error))
+        self.context.revision.bump()
         self.log_message(
             "DELETE %s -> %s", result["name"], result["trashed"] or "完全削除"
         )
@@ -362,6 +401,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
             clip = self.context.clips.add(str(payload.get("text", "")), source=self._client())
         except ValueError as error:
             return self._error(HTTPStatus.BAD_REQUEST, str(error))
+        self.context.revision.bump()
         self.log_message("CLIP追加 (%d文字)", len(clip["text"]))
         self._json({"ok": True, "clip": clip})
 
@@ -373,6 +413,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
         removed = self.context.clips.delete(str(payload.get("id", "")))
         if not removed:
             return self._error(HTTPStatus.NOT_FOUND, "見つかりません")
+        self.context.revision.bump()
         self.log_message("CLIP削除")
         self._json({"ok": True})
 

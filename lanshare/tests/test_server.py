@@ -53,12 +53,14 @@ class ServerTestCase(unittest.TestCase):
 
     # --- ヘルパ ---
 
-    def request(self, method, path, body=None, headers=None, csrf=True, auth=True):
+    def request(self, method, path, body=None, headers=None, csrf=True, auth=True, cookie=None):
         conn = http.client.HTTPConnection(self.address, timeout=10)
         merged = {}
         if csrf:
             merged["X-LanShare"] = "1"
-        if auth and self.cookie:
+        if cookie:
+            merged["Cookie"] = cookie
+        elif auth and self.cookie:
             merged["Cookie"] = self.cookie
         merged.update(headers or {})
         conn.request(method, path, body=body, headers=merged)
@@ -68,11 +70,10 @@ class ServerTestCase(unittest.TestCase):
         conn.close()
         return result
 
-    def json_request(self, method, path, payload=None, **kwargs):
+    def json_request(self, method, path, payload=None, headers=None, **kwargs):
         body = json.dumps(payload or {}).encode()
-        status, headers, raw = self.request(
-            method, path, body, {"Content-Type": "application/json"}, **kwargs
-        )
+        merged = {"Content-Type": "application/json", **(headers or {})}
+        status, headers, raw = self.request(method, path, body, merged, **kwargs)
         try:
             return status, headers, json.loads(raw)
         except ValueError:
@@ -83,6 +84,21 @@ class ServerTestCase(unittest.TestCase):
         if status == 200:
             self.cookie = headers["Set-Cookie"].split(";")[0]
         return status
+
+    def login_device(self, user_agent):
+        """別端末としてログインし、そのセッションCookieを返す。"""
+        status, headers, _ = self.json_request(
+            "POST", "/api/login", {"pin": "123456"},
+            headers={"User-Agent": user_agent}, auth=False,
+        )
+        self.assertEqual(status, 200)
+        return headers["Set-Cookie"].split(";")[0]
+
+    def status_as(self, cookie, user_agent):
+        _, _, payload = self.json_request(
+            "GET", "/api/status", headers={"User-Agent": user_agent}, cookie=cookie
+        )
+        return payload
 
     def upload_files(self, files):
         body = multipart(files)
@@ -311,6 +327,74 @@ class NoAuthModeTest(ServerTestCase):
     def test_api_is_open(self):
         self.assertEqual(self.request("GET", "/api/files")[0], 200)
         self.assertEqual(self.upload_files([("a.txt", b"x")])[0], 200)
+
+
+IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
+WINDOWS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36"
+
+
+class DeviceStatusTest(ServerTestCase):
+    """セットアップ画面 → iPhone接続 → 転送画面 の流れを支える /api/status。"""
+
+    def test_requires_auth(self):
+        self.assertEqual(self.request("GET", "/api/status")[0], 401)
+
+    def test_pc_alone_sees_no_other_device(self):
+        pc = self.login_device(WINDOWS_UA)
+        status = self.status_as(pc, WINDOWS_UA)
+        self.assertFalse(status["otherConnected"])
+        self.assertFalse(status["mobileConnected"])
+        self.assertEqual(len(status["devices"]), 1)
+        self.assertTrue(status["devices"][0]["self"])
+        self.assertEqual(status["devices"][0]["name"], "Windows PC")
+
+    def test_iphone_connection_is_visible_to_pc(self):
+        pc = self.login_device(WINDOWS_UA)
+        self.status_as(pc, WINDOWS_UA)
+
+        phone = self.login_device(IPHONE_UA)
+        self.status_as(phone, IPHONE_UA)  # iPhone側の初回アクセスで端末が登録される
+
+        status = self.status_as(pc, WINDOWS_UA)
+        self.assertTrue(status["otherConnected"])
+        self.assertTrue(status["mobileConnected"])
+        self.assertEqual(status["latestDevice"], "iPhone")
+        names = sorted(device["name"] for device in status["devices"])
+        self.assertEqual(names, ["Windows PC", "iPhone"])
+
+        # iPhone側から見ると、PCが「自分以外の端末」になる
+        phone_status = self.status_as(phone, IPHONE_UA)
+        self.assertTrue(phone_status["otherConnected"])
+        self.assertFalse(phone_status["mobileConnected"])
+
+    def test_logout_removes_device(self):
+        pc = self.login_device(WINDOWS_UA)
+        phone = self.login_device(IPHONE_UA)
+        self.status_as(phone, IPHONE_UA)
+        self.assertTrue(self.status_as(pc, WINDOWS_UA)["otherConnected"])
+
+        self.json_request("POST", "/api/logout", cookie=phone)
+        self.assertFalse(self.status_as(pc, WINDOWS_UA)["otherConnected"])
+
+    def test_revision_changes_on_upload_and_delete(self):
+        self.login()
+        before = self.json_request("GET", "/api/status")[2]["revision"]
+        self.upload_files([("a.txt", b"x")])
+        after_upload = self.json_request("GET", "/api/status")[2]["revision"]
+        self.assertGreater(after_upload, before)
+        self.json_request("POST", "/api/delete", {"name": "a.txt"})
+        self.assertGreater(self.json_request("GET", "/api/status")[2]["revision"], after_upload)
+
+    def test_revision_changes_on_clip(self):
+        self.login()
+        before = self.json_request("GET", "/api/status")[2]["revision"]
+        self.json_request("POST", "/api/clips", {"text": "memo"})
+        self.assertGreater(self.json_request("GET", "/api/status")[2]["revision"], before)
+
+    def test_info_exposes_pin_for_setup_screen(self):
+        self.login()
+        info = self.json_request("GET", "/api/info")[2]
+        self.assertEqual(info["pin"], "123456")
 
 
 if __name__ == "__main__":

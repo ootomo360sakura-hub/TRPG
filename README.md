@@ -64,8 +64,9 @@ python3 tools/compose_page.py episodes/ep001  # 台本+コマ画像 → page_1.p
 python -m lanshare              :: ./shared を共有してサーバ起動(標準ライブラリのみ)
 ```
 
-起動するとコンソールに接続先URLとPIN、QRコードが表示される。
-iPhoneのカメラでQRを読み取ればSafariで開ける。
+アプリのURLは `http://<PCのIPアドレス>:8765/`。PCのブラウザで開くとQR付きのセットアップ画面、
+iPhoneのカメラでQRを読み取るとPIN入力なしでSafariが開き、
+接続を検知するとPC側は自動でファイル転送画面に切り替わる。
 オプションやWindowsファイアウォールの設定は **[`lanshare/README.md`](lanshare/README.md)** を参照。
 
 ## 補足

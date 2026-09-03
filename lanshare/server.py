@@ -49,8 +49,9 @@ def banner(context: AppContext, show_qr: bool = True) -> str:
         "  削除の扱い   : " + ("即時削除(復元不可)" if config.hard_delete
                                else "_trash/日時/ へ移動(PC側で復元可能)"),
         "-" * 56,
-        "  iPhoneから: 同じWi-Fiに接続し、上のURLをSafariで開いてPINを入力",
-        "  (下のQRコードをiPhoneのカメラで読み取ると自動で開きます)",
+        "  1) PCのブラウザで上のURLを開くとセットアップ画面(QR表示)になります",
+        "  2) iPhoneのカメラで下のQRを読み取るとSafariで接続します",
+        "  3) 接続を検知するとPCの画面は自動でファイル転送画面に切り替わります",
         "  終了: Ctrl+C",
         "=" * 56,
     ]
@@ -68,7 +69,11 @@ def serve(config: ServerConfig, show_qr: bool = True, open_browser: bool = False
     print(banner(context, show_qr), flush=True)
 
     if open_browser:
-        threading.Timer(0.7, lambda: webbrowser.open(context.share_urls()[0])).start()
+        # PC側はPIN入力を省いてセットアップ(QR)画面をそのまま開く
+        local = f"http://127.0.0.1:{config.port}/"
+        if context.auth.enabled and config.pin:
+            local += f"?pin={config.pin}"
+        threading.Timer(0.7, lambda: webbrowser.open(local)).start()
 
     try:
         server.serve_forever()

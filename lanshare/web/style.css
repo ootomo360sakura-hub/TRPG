@@ -129,3 +129,50 @@ progress { width: 100%; height: 8px; margin-top: 6px; }
   background: #111827; color: #fff; padding: 10px 18px; border-radius: 999px;
   font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 20; max-width: 90vw;
 }
+
+/* --- セットアップ画面(iPhoneの接続待ち) --- */
+#setup { display: none; }
+#setup:not(.hidden) { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px 16px; }
+.setup-card {
+  width: min(420px, 100%); text-align: center;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 16px; padding: 24px;
+}
+.steps { text-align: left; margin: 12px 0 20px; padding-left: 1.3em; color: var(--muted); }
+.steps li { margin-bottom: 4px; }
+.steps strong { color: var(--text); }
+.qr-frame {
+  display: inline-block; background: #fff; padding: 12px;
+  border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+}
+.qr-frame img { display: block; width: min(240px, 60vw); height: auto; image-rendering: pixelated; }
+.setup-url { margin: 16px 0 4px; font-size: 15px; overflow-wrap: anywhere; }
+
+.waiting {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 20px 0 12px; color: var(--muted); font-size: 14px;
+}
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+.connected {
+  margin: 20px 0 12px; font-weight: 600; color: var(--accent);
+  animation: pop .3s ease-out;
+}
+@keyframes pop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.devices { list-style: none; margin: 0 0 12px; padding: 0; }
+.devices li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px;
+}
+.devices li:last-child { border-bottom: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.dot.online { background: #22c55e; }
+.device-name { font-weight: 600; }
+.device-meta { color: var(--muted); margin-left: auto; font-size: 13px; }

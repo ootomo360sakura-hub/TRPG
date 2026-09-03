@@ -22,6 +22,30 @@
   </form>
 </div>
 
+<div id="setup" class="view hidden">
+  <div class="setup-card">
+    <h1>iPhoneを接続</h1>
+    <ol class="steps">
+      <li>iPhoneをこのPCと<strong>同じWi-Fi</strong>につなぐ</li>
+      <li>iPhoneのカメラで下のQRコードを読み取る</li>
+      <li>表示された通知をタップしてSafariで開く</li>
+    </ol>
+
+    <div class="qr-frame"><img id="setup-qr" alt="接続用QRコード"></div>
+
+    <p class="setup-url mono" id="setup-url"></p>
+    <p class="muted small" id="setup-pin"></p>
+
+    <div class="waiting" id="waiting">
+      <span class="spinner" aria-hidden="true"></span>
+      <span>iPhoneの接続を待っています…</span>
+    </div>
+    <p class="connected hidden" id="connected-msg"></p>
+
+    <button id="skip-setup" class="ghost" type="button">接続せずにファイル画面へ進む</button>
+  </div>
+</div>
+
 <div id="app" class="view hidden">
   <header class="bar">
     <div class="bar-title">
@@ -74,6 +98,11 @@
         <img id="qr" class="qr" alt="接続用QRコード">
         <p id="urls" class="urls"></p>
         <p class="muted small">同じWi-Fi(ルーター)に接続している必要があります。</p>
+      </div>
+      <div class="card">
+        <h2>接続中の端末</h2>
+        <ul id="devices" class="devices"></ul>
+        <button id="show-setup" class="ghost" type="button">セットアップ画面を表示</button>
       </div>
       <div class="card">
         <h2>保存先</h2>

@@ -4,6 +4,9 @@ const $ = (id) => document.getElementById(id);
 const HEADERS = { "X-LanShare": "1" };
 
 let info = { auth: false, root: "", hardDelete: false, onConflict: "rename", urls: [], maxUpload: null };
+let view = "login";        // login / setup / app
+let lastRevision = null;   // 共有フォルダの更新回数(変わったら一覧を読み直す)
+let pollTimer = null;
 
 /* ---------- 共通ユーティリティ ---------- */
 
@@ -41,10 +44,49 @@ async function api(path, options = {}) {
   return data;
 }
 
+function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+function show(name) {
+  view = name;
+  for (const id of ["login", "setup", "app"]) {
+    $(id).classList.toggle("hidden", id !== name);
+  }
+}
+
 function showLogin() {
-  $("app").classList.add("hidden");
-  $("login").classList.remove("hidden");
+  show("login");
   $("pin").focus();
+}
+
+function showSetup() {
+  show("setup");
+  $("setup-qr").src = `/qr.png?t=${Date.now()}`;
+  $("setup-url").textContent = info.urls[0] || "";
+  $("setup-pin").textContent = info.pin
+    ? `QRが読めないときは、Safariで上のURLを開いてPIN ${info.pin} を入力`
+    : "PIN認証は無効です。上のURLをSafariで開いてください";
+  $("waiting").classList.remove("hidden");
+  $("connected-msg").classList.add("hidden");
+}
+
+function showApp() {
+  show("app");
+  loadFiles().catch(() => {});
+  loadClips().catch(() => {});
+}
+
+function onDeviceConnected(name) {
+  if (view !== "setup") return;
+  $("waiting").classList.add("hidden");
+  const message = $("connected-msg");
+  message.textContent = `${name || "端末"} が接続されました。ファイル転送画面へ移動します…`;
+  message.classList.remove("hidden");
+  setTimeout(() => {
+    showApp();
+    toast(`${name || "端末"} と接続中です`);
+  }, 1200);
 }
 
 /* ---------- 起動 ---------- */
@@ -55,8 +97,28 @@ async function boot() {
   } catch (error) {
     return; // 未認証ならログイン画面が出ている
   }
-  $("login").classList.add("hidden");
-  $("app").classList.remove("hidden");
+  applyInfo();
+
+  let status = null;
+  try {
+    status = await api("/api/status");
+  } catch (error) {
+    status = null;
+  }
+  lastRevision = status ? status.revision : null;
+  if (status) renderDevices(status.devices);
+
+  // PC側で、まだ他の端末がつながっていなければセットアップ(QR)画面から始める
+  const skipped = sessionStorage.getItem("lanshare-skip-setup") === "1";
+  if (!isMobile() && status && !status.otherConnected && !skipped) {
+    showSetup();
+  } else {
+    showApp();
+  }
+  startPolling();
+}
+
+function applyInfo() {
   $("root-label").textContent = info.root;
   $("root-path").textContent = info.rootPath;
   $("policy").textContent =
@@ -68,8 +130,70 @@ async function boot() {
       : " 削除したファイルは _trash/ に日時つきで移動します。");
   $("urls").innerHTML = info.urls.map((url) => `<span>${url}</span>`).join("<br>");
   $("qr").src = `/qr.png?t=${Date.now()}`;
-  await Promise.all([loadFiles(), loadClips()]);
 }
+
+/* ---------- 接続状態の監視 ---------- */
+
+function startPolling() {
+  clearTimeout(pollTimer);
+  const tick = async () => {
+    try {
+      const status = await api("/api/status");
+      renderDevices(status.devices);
+      if (view === "setup" && status.otherConnected) {
+        onDeviceConnected(status.latestDevice);
+      }
+      if (view === "app" && lastRevision !== null && status.revision !== lastRevision) {
+        loadFiles().catch(() => {});
+        loadClips().catch(() => {});
+      }
+      lastRevision = status.revision;
+    } catch (error) {
+      // 未認証・一時的な通信エラーは次回の巡回で回復させる
+    }
+    pollTimer = setTimeout(tick, document.hidden ? 10000 : 2000);
+  };
+  tick();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && view !== "login") startPolling();
+});
+
+function renderDevices(devices) {
+  const list = $("devices");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const device of devices || []) {
+    const item = document.createElement("li");
+    const dot = document.createElement("span");
+    dot.className = `dot${device.online ? " online" : ""}`;
+    const name = document.createElement("span");
+    name.className = "device-name";
+    name.textContent = device.name + (device.self ? "(この端末)" : "");
+    const meta = document.createElement("span");
+    meta.className = "device-meta";
+    meta.textContent = `${device.address} ・ ${device.online ? "接続中" : "切断"}`;
+    item.append(dot, name, meta);
+    list.append(item);
+  }
+  if (!(devices || []).length) {
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = "接続中の端末はありません";
+    list.append(item);
+  }
+}
+
+$("skip-setup").addEventListener("click", () => {
+  sessionStorage.setItem("lanshare-skip-setup", "1");
+  showApp();
+});
+
+$("show-setup").addEventListener("click", () => {
+  sessionStorage.removeItem("lanshare-skip-setup");
+  showSetup();
+});
 
 /* ---------- ログイン ---------- */
 
@@ -93,6 +217,8 @@ $("login-form").addEventListener("submit", async (event) => {
 });
 
 $("logout").addEventListener("click", async () => {
+  clearTimeout(pollTimer);
+  sessionStorage.removeItem("lanshare-skip-setup");
   await fetch("/api/logout", { method: "POST", headers: HEADERS });
   location.reload();
 });
