@@ -64,7 +64,8 @@ python3 tools/compose_page.py episodes/ep001  # 台本+コマ画像 → page_1.p
 python -m lanshare              :: ./shared を共有してサーバ起動(標準ライブラリのみ)
 ```
 
-`lanshare\install-shortcut.bat` を実行すると、デスクトップに起動用ショートカットを作成できる。
+`lanshare\install-shortcut.bat` を実行すると、デスクトップに起動用のショートカットと、
+このPCのIPアドレスを埋め込んだURL(例: `http://192.168.1.23:8765/`)を開くショートカットを作成できる。
 
 ファイルの種類・サイズに制限はない(上限はPCの空き容量)。
 アプリのURLは `http://<PCのIPアドレス>:8765/`。PCのブラウザで開くとQR付きのセットアップ画面、

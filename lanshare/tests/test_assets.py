@@ -65,23 +65,61 @@ class PowerShellScriptTest(unittest.TestCase):
         # OneDriveでリダイレクトされたデスクトップも拾えるAPIを使う
         self.assertIn("[Environment]::GetFolderPath('Desktop')", self.text)
 
+    def test_creates_url_shortcut_with_detected_address(self):
+        """IPアドレス入りURLの .url ショートカットを作ること。"""
+        self.assertIn("'[InternetShortcut]'", self.text)
+        self.assertIn('"URL=$url"', self.text)
+        self.assertIn("$url = 'http://{0}:{1}/' -f $primary, $Port", self.text)
+        self.assertIn("($UrlName + '.url')", self.text)
+
+    def test_detects_lan_address(self):
+        lookup = self.text[self.text.index("function Get-LanAddress"):self.text.index("function Backup-Existing")]
+        # 既定ゲートウェイを持つ接続を優先し、使えない環境ではDNS経由で拾う
+        self.assertIn("Get-NetIPConfiguration", lookup)
+        self.assertIn("IPv4DefaultGateway", lookup)
+        self.assertIn("RouteMetric", lookup)
+        self.assertIn("[System.Net.Dns]::GetHostAddresses", lookup)
+        # ループバックとAPIPAは候補から外す
+        self.assertIn("StartsWith('127.')", lookup)
+        self.assertIn("StartsWith('169.254.')", lookup)
+
+    def test_port_default_matches_server(self):
+        from lanshare.config import DEFAULT_PORT
+
+        self.assertIn(f"[int]$Port = {DEFAULT_PORT}", self.text)
+        self.assertIn("[string]$Address", self.text)
+
+    def test_falls_back_when_no_address_found(self):
+        self.assertIn("$primary = '127.0.0.1'", self.text)
+        self.assertIn("$reachable = $false", self.text)
+        self.assertIn("iPhoneからは開けません", self.text)
+
+    def test_url_file_written_as_ascii(self):
+        """.url はANSIとして読まれるので、非ASCIIのパスは短い名前に置き換える。"""
+        self.assertIn("-Encoding ASCII", self.text)
+        self.assertIn("ShortPath", self.text)
+
     def test_points_at_launcher_and_icon(self):
         self.assertIn("start-server.bat", self.text)
         self.assertIn("assets\\lanshare.ico", self.text)
         self.assertIn("$shortcut.WorkingDirectory = $repo", self.text.replace("  ", " "))
 
     def test_backs_up_before_replacing(self):
-        backup = self.text.index("Copy-Item")
-        create = self.text.index("CreateShortcut")
-        self.assertLess(backup, create, "既存のショートカットを退避してから作り直すこと")
         self.assertIn("yyyyMMdd-HHmmss", self.text)
+        # .lnk と .url のどちらも、作り直す前に退避する
+        self.assertLess(self.text.index("Backup-Existing -Path $link"), self.text.index("CreateShortcut"))
+        self.assertLess(self.text.index("Backup-Existing -Path $urlLink"),
+                        self.text.index("Set-Content -LiteralPath $urlLink"))
 
     def test_confirms_before_deleting(self):
-        remove_section = self.text[self.text.index("if ($Remove)"):]
+        remove_section = self.text[self.text.index("if ($Remove)"):self.text.index("# --- 作成 ---")]
         confirm = remove_section.index("Read-Host")
         delete = remove_section.index("Remove-Item")
         self.assertLess(confirm, delete, "削除の前に確認すること")
         self.assertIn("削除します", remove_section)
+        # 2つのショートカットが対象で、消えるのはそれだけだと伝える
+        self.assertIn("@($link, $urlLink)", remove_section)
+        self.assertIn("共有フォルダの中身やアプリ本体は消えません", remove_section)
 
 
 class BatchFileTest(unittest.TestCase):
