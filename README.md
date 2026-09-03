@@ -67,6 +67,7 @@ python3 tools/compose_page.py episodes/ep001  # 台本+コマ画像 → page_1.p
 | ファイル | 内容 |
 |---------|------|
 | `docs/game-ideas.md` | 企画案10件(ターン制タクティカルRPG) |
+| `docs/spec-checkmate-tower.md` | 『詰みの塔』ゲームシステム仕様書(開発着手中) |
 | `docs/drive.md` | Googleドライブ連携。資料の置き場所とフォルダID一覧 |
 
 資料の正本は **Googleドライブのマイドライブ > ゲーム** フォルダにある。
