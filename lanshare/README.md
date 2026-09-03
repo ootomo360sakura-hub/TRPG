@@ -45,6 +45,19 @@ iPhone側にアプリのインストールは不要(App Store未使用)で、外
 `lanshare\start-server.bat` をダブルクリック。
 リポジトリ直下の `shared` フォルダが共有フォルダになり、PCのブラウザが自動で開く。
 
+### デスクトップにショートカットを作る
+
+`lanshare\install-shortcut.bat` をダブルクリックすると、デスクトップに
+**「LANファイル共有」**という専用アイコン付きのショートカットができる。
+以後はそれをダブルクリックするだけで起動できる。
+
+- ショートカットが起動するのは `lanshare\start-server.bat`、作業フォルダはリポジトリ直下
+- すでに同名のショートカットがある場合は、`lanshare\_shortcut-backup\` に
+  日時つき(例: `LANファイル共有.20260903-085334.lnk`)で退避してから作り直す
+- 消したいときは `lanshare\remove-shortcut.bat`。確認のうえ、
+  **デスクトップのショートカットだけ**を削除する(共有フォルダの中身やアプリ本体は消えない)
+- PowerShellの実行ポリシーは変更しない(このスクリプトを動かす間だけ一時的に回避する)
+
 ### コマンドから
 
 ```bat
@@ -209,6 +222,9 @@ New-NetFirewallRule -DisplayName "LAN File Share 8765" -Direction Inbound `
 | `qr.py` | QRコード生成(バイトモード、バージョン1〜10、PNG/AA出力) |
 | `netinfo.py` | LAN内IPの取得、接続元の判定 |
 | `web/` | 画面(HTML/CSS/JS。iPhone Safari向けにレイアウト調整) |
+| `start-server.bat` | Windows用の起動スクリプト(ダブルクリックで起動) |
+| `install-shortcut.ps1` / `.bat` / `remove-shortcut.bat` | デスクトップショートカットの作成・削除 |
+| `assets/lanshare.ico` | ショートカット用アイコン(`assets/make_icon.py` で生成。依存なしでICOを書き出す) |
 
 ### HTTP API
 

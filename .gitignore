@@ -3,3 +3,6 @@ __pycache__/
 
 # LANファイル共有アプリの既定の共有フォルダ
 shared/
+
+# ショートカット作成時の退避先
+lanshare/_shortcut-backup/

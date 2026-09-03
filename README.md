@@ -64,6 +64,8 @@ python3 tools/compose_page.py episodes/ep001  # 台本+コマ画像 → page_1.p
 python -m lanshare              :: ./shared を共有してサーバ起動(標準ライブラリのみ)
 ```
 
+`lanshare\install-shortcut.bat` を実行すると、デスクトップに起動用ショートカットを作成できる。
+
 ファイルの種類・サイズに制限はない(上限はPCの空き容量)。
 アプリのURLは `http://<PCのIPアドレス>:8765/`。PCのブラウザで開くとQR付きのセットアップ画面、
 iPhoneのカメラでQRを読み取るとPIN入力なしでSafariが開き、
