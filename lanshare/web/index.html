@@ -66,11 +66,14 @@
       <div id="drop" class="dropzone">
         <p class="drop-title">ファイルをドラッグ&amp;ドロップ</p>
         <p class="muted">またはボタンから選択(複数可)</p>
-        <p class="muted small">写真・動画・書類など種類の制限はなく、サイズの上限もありません(PCの空き容量まで)</p>
+        <p class="muted small">写真・動画・書類など種類の制限はなく、サイズの上限もありません(PCの空き容量まで)。
+          フォルダをドロップすると中のファイルをまとめて送ります</p>
         <div class="row">
           <button id="pick" class="primary" type="button">ファイルを選ぶ</button>
+          <button id="pick-folder" class="ghost" type="button">フォルダを選ぶ</button>
         </div>
         <input id="file-input" type="file" multiple hidden>
+        <input id="folder-input" type="file" multiple webkitdirectory hidden>
       </div>
 
       <ul id="uploads" class="uploads"></ul>

@@ -309,21 +309,102 @@ $("refresh").addEventListener("click", () => loadFiles().catch((e) => toast(e.me
 const queue = [];
 let uploading = false;
 
-function enqueue(files) {
-  for (const file of files) {
+/** フォルダ内のファイルは「フォルダ名_ファイル名」で保存する(共有フォルダは階層を持たない)。 */
+function flattenPath(path) {
+  return path.replace(/[\\/]+/g, "_").replace(/^_+/, "");
+}
+
+/** ドロップされた項目を、フォルダの中身まで展開して {file, path} の配列にする。 */
+function walkEntry(entry, prefix, found) {
+  return new Promise((resolve) => {
+    if (!entry) return resolve();
+    if (entry.isFile) {
+      entry.file(
+        (file) => {
+          found.push({ file, path: prefix + file.name });
+          resolve();
+        },
+        () => {
+          found.push({ path: prefix + entry.name, error: "読み取れませんでした" });
+          resolve();
+        }
+      );
+      return;
+    }
+    if (!entry.isDirectory) return resolve();
+    const reader = entry.createReader();
+    const readBatch = () => {
+      reader.readEntries(
+        async (batch) => {
+          if (!batch.length) return resolve();
+          for (const child of batch) {
+            await walkEntry(child, `${prefix}${entry.name}/`, found);
+          }
+          readBatch(); // readEntries は一度に全件返さないので、空になるまで繰り返す
+        },
+        () => resolve()
+      );
+    };
+    readBatch();
+  });
+}
+
+async function collectDropped(dataTransfer) {
+  // webkitGetAsEntry は drop イベント中に同期的に呼ぶ必要がある
+  const entries = Array.from(dataTransfer.items || [])
+    .map((item) => (item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
+    .filter(Boolean);
+  if (!entries.length) {
+    return Array.from(dataTransfer.files || []).map((file) => ({ file, path: file.name }));
+  }
+  const found = [];
+  for (const entry of entries) {
+    await walkEntry(entry, "", found);
+  }
+  return found;
+}
+
+function enqueue(entries) {
+  let added = 0;
+  for (const entry of entries) {
     const item = document.createElement("li");
     item.innerHTML =
       `<div class="upload-name"></div>` +
       `<progress max="100" value="0"></progress>` +
       `<div class="upload-state">待機中</div>`;
-    item.querySelector(".upload-name").textContent = `${file.name} (${formatSize(file.size)})`;
+    const label = item.querySelector(".upload-name");
+    const state = item.querySelector(".upload-state");
+    if (entry.error || !entry.file) {
+      label.textContent = entry.path;
+      state.textContent = `失敗: ${entry.error || "読み取れませんでした"}`;
+      state.classList.add("failed");
+      item.querySelector("progress").remove();
+      $("uploads").append(item);
+      continue;
+    }
+    label.textContent = `${entry.path} (${formatSize(entry.file.size)})`;
     $("uploads").append(item);
-    queue.push({ file, item });
+    queue.push({ file: entry.file, name: flattenPath(entry.path), item });
+    added += 1;
   }
+  if (added > 1) toast(`${added}件を順番に送信します`);
   pump();
 }
 
-function pump() {
+/** 送信前に先頭1バイトを読み、フォルダやクラウド上だけのファイルを見分ける。 */
+async function checkReadable(file) {
+  try {
+    await file.slice(0, 1).arrayBuffer();
+    return null;
+  } catch (error) {
+    if (file.size === 0 && !file.type) {
+      return "フォルダはこの方法では送れません。「フォルダを選ぶ」から選ぶか、フォルダを画面にドラッグ&ドロップしてください";
+    }
+    return "ファイルを読み取れませんでした(OneDrive等でクラウドにのみある、または移動・削除された可能性があります)";
+  }
+}
+
+async function pump() {
   if (uploading) return;
   const job = queue.shift();
   if (!job) {
@@ -331,13 +412,24 @@ function pump() {
     return;
   }
   uploading = true;
-  const { file, item } = job;
+  const { file, name, item } = job;
   const bar = item.querySelector("progress");
   const state = item.querySelector(".upload-state");
+  state.textContent = "確認中…";
+
+  const problem = await checkReadable(file);
+  if (problem) {
+    uploading = false;
+    state.textContent = `失敗: ${problem}`;
+    state.classList.add("failed");
+    bar.remove();
+    pump();
+    return;
+  }
   state.textContent = "送信中…";
 
   const form = new FormData();
-  form.append("file", file, file.name);
+  form.append("file", file, name);
 
   const request = new XMLHttpRequest();
   request.open("POST", "/api/upload");
@@ -356,7 +448,7 @@ function pump() {
     if (request.status >= 200 && request.status < 300) {
       const saved = (payload.saved || [])[0];
       bar.value = 100;
-      state.textContent = saved && saved.name !== file.name ? `完了(${saved.name} として保存)` : "完了";
+      state.textContent = saved && saved.name !== name ? `完了(${saved.name} として保存)` : "完了";
       if (saved && saved.backup) state.textContent += ` / 既存ファイルは ${saved.backup} に退避`;
       setTimeout(() => item.remove(), 4000);
     } else {
@@ -368,18 +460,35 @@ function pump() {
   });
   request.addEventListener("error", () => {
     uploading = false;
-    state.textContent = "失敗: 通信エラー";
+    state.textContent = "失敗: 送信が中断されました(ファイルを読み取れないか、接続が切れました)";
     state.classList.add("failed");
     pump();
   });
   request.send(form);
 }
 
+function fromInput(input) {
+  return Array.from(input.files).map((file) => ({
+    file,
+    path: file.webkitRelativePath || file.name,
+  }));
+}
+
 $("pick").addEventListener("click", () => $("file-input").click());
 $("file-input").addEventListener("change", (event) => {
-  enqueue(event.target.files);
+  enqueue(fromInput(event.target));
   event.target.value = "";
 });
+
+if (isMobile()) {
+  $("pick-folder").remove(); // iOSのSafariはフォルダ選択に対応していない
+} else {
+  $("pick-folder").addEventListener("click", () => $("folder-input").click());
+  $("folder-input").addEventListener("change", (event) => {
+    enqueue(fromInput(event.target));
+    event.target.value = "";
+  });
+}
 
 const drop = $("drop");
 ["dragenter", "dragover"].forEach((type) =>
@@ -395,7 +504,12 @@ const drop = $("drop");
   })
 );
 drop.addEventListener("drop", (event) => {
-  if (event.dataTransfer && event.dataTransfer.files.length) enqueue(event.dataTransfer.files);
+  if (!event.dataTransfer) return;
+  collectDropped(event.dataTransfer)
+    .then((entries) => {
+      if (entries.length) enqueue(entries);
+    })
+    .catch(() => toast("ドロップされた内容を読み取れませんでした"));
 });
 window.addEventListener("dragover", (event) => event.preventDefault());
 window.addEventListener("drop", (event) => event.preventDefault());
