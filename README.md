@@ -33,6 +33,7 @@ Claude Codeに「漫画を作って」と頼むとこの手順で作成される
 | `data/layouts.json` | ボールトからコンパイルしたコマ割り定義(自動生成) |
 | `tools/` | パイプラインスクリプト |
 | `episodes/` | エピソードごとの台本・コマ画像・完成ページ |
+| `scenarios/` | TRPGシナリオ本体（卓で使うGM資料一式） |
 
 ## ツール
 
@@ -52,6 +53,14 @@ python3 tools/compose_page.py episodes/ep001  # 台本+コマ画像 → page_1.p
 2. **NotebookLM**: `tools/export_notebooklm.py` の出力(`notebooklm/`)を
    NotebookLMの「ソースを追加」で取り込み、コマ割り研究・要約・質問に使う。
    得られた知見は `vault/知識/` に還元する(NotebookLMは公開APIがないため手動取り込み)
+
+## シナリオ
+
+漫画パイプラインとは別に、卓で実際に回すためのTRPGシナリオを `scenarios/` に置いている。
+
+| シナリオ | システム | 内容 |
+|----------|----------|------|
+| [`arianrhod2e_魔石回廊/`](scenarios/arianrhod2e_魔石回廊/) | アリアンロッドRPG 2E | ダンジョンハック。魔石を台座にセットして戦闘マップ上に「2倍」の反応エリアを作り、重ねて戦う |
 
 ## 補足
 
