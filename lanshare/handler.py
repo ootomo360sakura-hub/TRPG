@@ -5,9 +5,10 @@
 * GET  /static/*             UIのCSS/JS
 * GET  /qr.png               接続用QRコード(要認証)
 * GET  /api/info             サーバ情報
-* GET  /api/files            ファイル一覧
+* GET  /api/files?path=      指定フォルダのフォルダ・ファイル一覧
 * GET  /api/status           接続中の端末と更新回数(セットアップ画面の待ち受け)
-* GET  /files/<name>         ダウンロード(Rangeリクエスト対応)
+* GET  /files/<相対パス>      ダウンロード(Rangeリクエスト対応)
+* GET  /zip/<相対パス>        フォルダをZIPにまとめてダウンロード
 * POST /api/login /logout    PIN認証
 * POST /api/upload           multipartアップロード(逐次書き込み、種類・サイズの制限なし)
 * POST /api/delete           削除(1件でも複数でも可。既定はゴミ箱へ退避)
@@ -207,13 +208,15 @@ class LanShareHandler(BaseHTTPRequestHandler):
         if path == "/api/info":
             return self._api_info()
         if path == "/api/files":
-            return self._api_files()
+            return self._api_files(query)
         if path == "/api/status":
             return self._api_status()
         if path == "/api/clips":
             return self._api_clips()
         if path.startswith("/files/"):
             return self._serve_download(path[len("/files/"):], query)
+        if path == "/zip" or path.startswith("/zip/"):
+            return self._serve_zip(path[len("/zip/"):] if path.startswith("/zip/") else "")
         self._error(HTTPStatus.NOT_FOUND, "見つかりません")
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -302,13 +305,22 @@ class LanShareHandler(BaseHTTPRequestHandler):
             "version": __version__,
         })
 
-    def _api_files(self) -> None:
+    def _api_files(self, query: dict[str, list[str]] | None = None) -> None:
+        """``?path=`` で指定したフォルダの中身(フォルダとファイル)を返す。"""
         if not self._authenticated():
             return self._error(HTTPStatus.UNAUTHORIZED, "認証が必要です")
-        files = [info.as_dict() for info in self.context.store.list_files()]
+        relative = ((query or {}).get("path") or [""])[0].strip("/")
+        try:
+            folders, files = self.context.store.list_dir(relative)
+        except StorageError as error:
+            return self._error(HTTPStatus.NOT_FOUND, str(error))
+        parent = relative.rpartition("/")[0] if relative else None
         self._json({
-            "files": files,
-            "totalSize": sum(f["size"] for f in files),
+            "path": relative,
+            "parent": parent,
+            "folders": [info.as_dict() for info in folders],
+            "files": [info.as_dict() for info in files],
+            "totalSize": sum(info.size for info in files),
             "freeSpace": self.context.store.free_space(),
         })
 
@@ -363,12 +375,18 @@ class LanShareHandler(BaseHTTPRequestHandler):
         reader = _LimitedReader(self.rfile, length)
         parser = MultipartParser(reader, boundary)
         saved: list[dict] = []
+        folder = ""  # 直前の path フィールドで指定された保存先フォルダ
         try:
             for part in parser:
                 if not part.is_file:
-                    part.drain()
+                    if part.name == "path":
+                        folder = part.read_text(limit=4096).strip().strip("/")
+                    else:
+                        part.drain()
                     continue
-                record = self.context.store.save(part.filename or "file", part.stream())
+                name = part.filename or "file"
+                target = f"{folder}/{name}" if folder else name
+                record = self.context.store.save(target, part.stream())
                 saved.append(record)
                 self.log_message("UPLOAD %s (%d bytes)", record["name"], record["size"])
         except (MultipartError, StorageError) as error:
@@ -457,10 +475,46 @@ class LanShareHandler(BaseHTTPRequestHandler):
 
     # --- ダウンロード ---
 
+    def _send_chunked(self, content_type: str, filename: str, chunks) -> None:
+        """大きさが分からないデータを、チャンク形式で流しながら送る。"""
+        quoted = urllib.parse.quote(filename)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted}")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        try:
+            for chunk in chunks:
+                if not chunk:
+                    continue
+                self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+                self.wfile.write(chunk)
+                self.wfile.write(b"\r\n")
+            self.wfile.write(b"0\r\n\r\n")
+        except (ConnectionError, TimeoutError, OSError):
+            self.close_connection = True
+            self.log_message("ZIP送信を中断しました")
+
+    def _serve_zip(self, raw_path: str) -> None:
+        """フォルダ(空なら共有フォルダ全体)をZIPにまとめて送る。"""
+        if not self._authenticated():
+            return self._error(HTTPStatus.UNAUTHORIZED, "認証が必要です")
+        relative = urllib.parse.unquote(raw_path).strip("/")
+        try:
+            folder = self.context.store.directory(relative)
+        except StorageError as error:
+            return self._error(HTTPStatus.NOT_FOUND, str(error))
+        name = f"{folder.name}.zip" if relative else f"{self.context.store.root.name}.zip"
+        self.log_message("ZIP %s", relative or "(共有フォルダ全体)")
+        self._send_chunked("application/zip", name, self.context.store.iter_zip(relative))
+
     def _serve_download(self, raw_name: str, query: dict[str, list[str]]) -> None:
         if not self._authenticated():
             return self._error(HTTPStatus.UNAUTHORIZED, "認証が必要です")
-        name = raw_name.split("?")[0]
+        name = raw_name.split("?")[0].strip("/")
         try:
             path = self.context.store.resolve(name)
         except StorageError as error:
@@ -471,7 +525,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
         size = path.stat().st_size
         content_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
         disposition = "attachment" if query.get("dl") else "inline"
-        quoted = urllib.parse.quote(name)
+        quoted = urllib.parse.quote(path.name)
         headers = {
             "Accept-Ranges": "bytes",
             "Content-Disposition": f"{disposition}; filename*=UTF-8''{quoted}",

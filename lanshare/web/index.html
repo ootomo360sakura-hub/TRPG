@@ -76,7 +76,8 @@
         <p class="drop-title">ファイルをドラッグ&amp;ドロップ</p>
         <p class="muted">またはボタンから選択(複数可)</p>
         <p class="muted small">写真・動画・書類など種類の制限はなく、サイズの上限もありません(PCの空き容量まで)。
-          フォルダをドロップすると中のファイルをまとめて送ります</p>
+          フォルダはそのままの構成で送られます</p>
+        <p id="drop-target" class="muted small drop-target hidden"></p>
         <div class="row">
           <button id="pick" class="primary" type="button">ファイルを選ぶ</button>
           <button id="pick-folder" class="ghost" type="button">フォルダを選ぶ</button>
@@ -87,9 +88,12 @@
 
       <ul id="uploads" class="uploads"></ul>
 
+      <nav id="breadcrumb" class="breadcrumb" aria-label="フォルダの位置"></nav>
+
       <div class="list-head">
-        <h2>共有中のファイル <span id="file-count" class="muted"></span></h2>
+        <h2 id="list-title">共有中のファイル <span id="file-count" class="muted"></span></h2>
         <div class="head-actions">
+          <button id="zip-current" class="ghost" type="button">ZIPで保存</button>
           <button id="select-mode" class="ghost" type="button">選択</button>
           <button id="refresh" class="ghost" type="button">更新</button>
         </div>
@@ -107,7 +111,7 @@
         </div>
       </div>
       <ul id="files" class="files"></ul>
-      <p id="files-empty" class="muted empty hidden">まだファイルがありません。</p>
+      <p id="files-empty" class="muted empty hidden">このフォルダは空です。</p>
     </section>
 
     <section id="tab-text" class="panel hidden">

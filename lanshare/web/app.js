@@ -236,93 +236,240 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-/* ---------- ファイル一覧 ---------- */
+/* ---------- ファイル一覧(フォルダ対応) ---------- */
+
+let currentPath = "";   // 表示中のフォルダ(共有フォルダ直下は "")
+
+function joinPath(base, name) {
+  return base ? `${base}/${name}` : name;
+}
+
+function encodePath(path) {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+function openFolder(path) {
+  currentPath = path;
+  selected.clear();
+  loadFiles().catch((error) => toast(error.message));
+}
+
+function renderBreadcrumb() {
+  const nav = $("breadcrumb");
+  nav.innerHTML = "";
+  const segments = currentPath ? currentPath.split("/") : [];
+
+  const addLink = (label, path) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", () => openFolder(path));
+    nav.append(button);
+  };
+  const addSeparator = () => {
+    const span = document.createElement("span");
+    span.className = "sep";
+    span.textContent = "›";
+    nav.append(span);
+  };
+
+  if (!segments.length) {
+    const span = document.createElement("span");
+    span.className = "current";
+    span.textContent = "共有フォルダ";
+    nav.append(span);
+    return;
+  }
+
+  addLink("共有フォルダ", "");
+  segments.forEach((segment, index) => {
+    addSeparator();
+    if (index === segments.length - 1) {
+      const span = document.createElement("span");
+      span.className = "current";
+      span.textContent = segment;
+      nav.append(span);
+    } else {
+      addLink(segment, segments.slice(0, index + 1).join("/"));
+    }
+  });
+}
+
+function rowShell(path, iconText, className) {
+  const item = document.createElement("li");
+  item.dataset.path = path;
+  item.className = className;
+  const row = document.createElement("div");
+  row.className = "file-row";
+
+  if (selectMode) {
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.className = "file-check";
+    check.checked = selected.has(path);
+    check.setAttribute("aria-label", `${path} を選択`);
+    check.addEventListener("change", () => {
+      if (check.checked) selected.add(path);
+      else selected.delete(path);
+      item.classList.toggle("picked", check.checked);
+      updateBulkBar();
+    });
+    item.classList.toggle("picked", check.checked);
+    row.append(check);
+  }
+
+  const icon = document.createElement("span");
+  icon.className = "row-icon";
+  icon.textContent = iconText;
+  row.append(icon);
+
+  const main = document.createElement("div");
+  main.className = "file-main";
+  row.append(main);
+
+  const actions = document.createElement("div");
+  actions.className = "file-actions";
+  row.append(actions);
+
+  item.append(row);
+  return { item, main, actions };
+}
 
 async function loadFiles() {
-  const data = await api("/api/files");
+  const data = await api(`/api/files?path=${encodeURIComponent(currentPath)}`);
+  currentPath = data.path;
+  renderBreadcrumb();
+
   const list = $("files");
   list.innerHTML = "";
-  const available = new Set(data.files.map((file) => file.name));
-  for (const name of Array.from(selected)) {
-    if (!available.has(name)) selected.delete(name);
+
+  const available = new Set([
+    ...data.folders.map((folder) => joinPath(data.path, folder.name)),
+    ...data.files.map((file) => joinPath(data.path, file.name)),
+  ]);
+  for (const path of Array.from(selected)) {
+    if (!available.has(path)) selected.delete(path);
   }
+
   const free = data.freeSpace ? `空き ${formatSize(data.freeSpace)}` : "";
-  $("file-count").textContent = data.files.length
-    ? `(${data.files.length}件 / ${formatSize(data.totalSize)}${free ? " ・ " + free : ""})`
-    : free && `(${free})`;
-  $("files-empty").classList.toggle("hidden", data.files.length > 0);
+  const counts = [];
+  if (data.folders.length) counts.push(`フォルダ${data.folders.length}`);
+  if (data.files.length) counts.push(`${data.files.length}件 / ${formatSize(data.totalSize)}`);
+  if (free) counts.push(free);
+  $("file-count").textContent = counts.length ? `(${counts.join(" ・ ")})` : "";
+  $("list-title").firstChild.textContent = currentPath ? `${currentPath.split("/").pop()} の中身 ` : "共有中のファイル ";
+  $("files-empty").classList.toggle("hidden", data.folders.length + data.files.length > 0);
+  $("drop-target").textContent = currentPath ? `保存先: ${currentPath}` : "";
+  $("drop-target").classList.toggle("hidden", !currentPath);
+
+  for (const folder of data.folders) {
+    const path = joinPath(data.path, folder.name);
+    const { item, main, actions } = rowShell(path, "📁", "folder-row");
+
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "folder-name";
+    name.textContent = folder.name;
+    name.addEventListener("click", () => openFolder(path));
+    const meta = document.createElement("div");
+    meta.className = "file-meta";
+    meta.textContent = `${folder.entries}件 ・ ${folder.modified}`;
+    main.append(name, meta);
+
+    const zip = document.createElement("button");
+    zip.className = "link";
+    zip.type = "button";
+    zip.textContent = "ZIPで保存";
+    zip.addEventListener("click", () => {
+      toast("ZIPを作成しています…");
+      location.href = `/zip/${encodePath(path)}`;
+    });
+    const remove = document.createElement("button");
+    remove.className = "link danger";
+    remove.type = "button";
+    remove.textContent = "削除";
+    remove.addEventListener("click", () => deleteEntry(path, folder.name, true));
+    actions.append(zip, remove);
+    list.append(item);
+  }
 
   for (const file of data.files) {
-    const item = document.createElement("li");
-    const row = document.createElement("div");
-    row.className = "file-row";
+    const path = joinPath(data.path, file.name);
+    const { item, main, actions } = rowShell(path, "📄", "");
 
-    if (selectMode) {
-      const check = document.createElement("input");
-      check.type = "checkbox";
-      check.className = "file-check";
-      check.checked = selected.has(file.name);
-      check.setAttribute("aria-label", `${file.name} を選択`);
-      check.addEventListener("change", () => {
-        if (check.checked) selected.add(file.name);
-        else selected.delete(file.name);
-        item.classList.toggle("picked", check.checked);
-        updateBulkBar();
-      });
-      item.classList.toggle("picked", check.checked);
-      row.append(check);
-    }
-
-    const main = document.createElement("div");
-    main.className = "file-main";
     const link = document.createElement("a");
     link.className = "file-name";
-    link.href = `/files/${encodeURIComponent(file.name)}`;
+    link.href = `/files/${encodePath(path)}`;
     link.textContent = file.name;
     const meta = document.createElement("div");
     meta.className = "file-meta";
     meta.textContent = `${formatSize(file.size)} ・ ${file.modified}`;
     main.append(link, meta);
 
-    const actions = document.createElement("div");
-    actions.className = "file-actions";
     const save = document.createElement("button");
     save.className = "link";
     save.type = "button";
     save.textContent = "保存";
     save.addEventListener("click", () => {
-      location.href = `/files/${encodeURIComponent(file.name)}?dl=1`;
+      location.href = `/files/${encodePath(path)}?dl=1`;
     });
     const remove = document.createElement("button");
     remove.className = "link danger";
     remove.type = "button";
     remove.textContent = "削除";
-    remove.addEventListener("click", () => deleteFile(file));
+    remove.addEventListener("click", () => deleteEntry(path, file.name, false));
     actions.append(save, remove);
-
-    row.append(main, actions);
-    item.append(row);
     list.append(item);
   }
+
   updateBulkBar();
 }
 
+function deleteMessage(count, hasFolder) {
+  const target = hasFolder ? "フォルダ(中のファイルごと)" : "ファイル";
+  return info.hardDelete
+    ? `この操作でPC内の${target}を完全に削除します。元に戻せません。`
+    : `この操作でPC内の共有フォルダから${target}を削除します(_trash/ に日時つきで移動するので、PC側で復元できます)。`;
+}
+
+async function deleteEntry(path, label, isFolder) {
+  if (!confirm(`「${label}」を削除しますか?\n\n${deleteMessage(1, isFolder)}`)) return;
+  try {
+    const result = await api("/api/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: path }),
+    });
+    toast(result.trashed ? `削除しました(${result.trashed} に退避)` : "完全に削除しました");
+    await loadFiles();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+$("refresh").addEventListener("click", () => loadFiles().catch((e) => toast(e.message)));
+
+$("zip-current").addEventListener("click", () => {
+  toast("ZIPを作成しています…");
+  location.href = currentPath ? `/zip/${encodePath(currentPath)}` : "/zip";
+});
+
 /* ---------- まとめて削除 ---------- */
 
-function currentNames() {
-  return Array.from($("files").querySelectorAll(".file-name")).map((link) => link.textContent);
+function currentEntries() {
+  return Array.from($("files").children).map((item) => item.dataset.path);
 }
 
 function updateBulkBar() {
-  const names = currentNames();
+  const paths = currentEntries();
   $("bulk-bar").classList.toggle("hidden", !selectMode);
   $("select-mode").textContent = selectMode ? "選択中" : "選択";
   if (!selectMode) return;
-  $("selected-count").textContent = `${selected.size} / ${names.length} 件を選択中`;
+  $("selected-count").textContent = `${selected.size} / ${paths.length} 件を選択中`;
   $("delete-selected").disabled = selected.size === 0;
   $("delete-selected").textContent =
     selected.size > 0 ? `選択した${selected.size}件を削除` : "まとめて削除";
-  $("select-all").checked = names.length > 0 && selected.size === names.length;
+  $("select-all").checked = paths.length > 0 && selected.size === paths.length;
 }
 
 function setSelectMode(on) {
@@ -336,19 +483,18 @@ $("exit-select").addEventListener("click", () => setSelectMode(false));
 
 $("select-all").addEventListener("change", (event) => {
   selected.clear();
-  if (event.target.checked) currentNames().forEach((name) => selected.add(name));
+  if (event.target.checked) currentEntries().forEach((path) => selected.add(path));
   loadFiles().catch(() => {});
 });
 
 $("delete-selected").addEventListener("click", async () => {
   const names = Array.from(selected);
   if (!names.length) return;
-  const preview = names.slice(0, 5).map((name) => `・${name}`).join("\n");
+  const hasFolder = Array.from($("files").children)
+    .some((item) => item.classList.contains("folder-row") && selected.has(item.dataset.path));
+  const preview = names.slice(0, 5).map((name) => `・${name.split("/").pop()}`).join("\n");
   const rest = names.length > 5 ? `\n・ほか ${names.length - 5} 件` : "";
-  const detail = info.hardDelete
-    ? "この操作でPC内のファイルを完全に削除します。元に戻せません。"
-    : "この操作でPC内の共有フォルダからファイルを削除します(_trash/ の同じ日時フォルダにまとめて移動するので、PC側で復元できます)。";
-  if (!confirm(`${names.length}件のファイルを削除しますか?\n\n${preview}${rest}\n\n${detail}`)) return;
+  if (!confirm(`${names.length}件を削除しますか?\n\n${preview}${rest}\n\n${deleteMessage(names.length, hasFolder)}`)) return;
 
   $("delete-selected").disabled = true;
   try {
@@ -369,35 +515,10 @@ $("delete-selected").addEventListener("click", async () => {
   }
 });
 
-async function deleteFile(file) {
-  const detail = info.hardDelete
-    ? "この操作でPC内のファイルを完全に削除します。元に戻せません。"
-    : "この操作でPC内の共有フォルダからファイルを削除します(_trash/ へ日時つきで移動するので、PC側で復元できます)。";
-  if (!confirm(`「${file.name}」を削除しますか?\n\n${detail}`)) return;
-  try {
-    const result = await api("/api/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name }),
-    });
-    toast(result.trashed ? `削除しました(${result.trashed} に退避)` : "完全に削除しました");
-    await loadFiles();
-  } catch (error) {
-    toast(error.message);
-  }
-}
-
-$("refresh").addEventListener("click", () => loadFiles().catch((e) => toast(e.message)));
-
 /* ---------- アップロード ---------- */
 
 const queue = [];
 let uploading = false;
-
-/** フォルダ内のファイルは「フォルダ名_ファイル名」で保存する(共有フォルダは階層を持たない)。 */
-function flattenPath(path) {
-  return path.replace(/[\\/]+/g, "_").replace(/^_+/, "");
-}
 
 /** ドロップされた項目を、フォルダの中身まで展開して {file, path} の配列にする。 */
 function walkEntry(entry, prefix, found) {
@@ -469,7 +590,7 @@ function enqueue(entries) {
     }
     label.textContent = `${entry.path} (${formatSize(entry.file.size)})`;
     $("uploads").append(item);
-    queue.push({ file: entry.file, name: flattenPath(entry.path), item });
+    queue.push({ file: entry.file, name: entry.path, folder: currentPath, item });
     added += 1;
   }
   if (added > 1) toast(`${added}件を順番に送信します`);
@@ -497,7 +618,7 @@ async function pump() {
     return;
   }
   uploading = true;
-  const { file, name, item } = job;
+  const { file, name, folder, item } = job;
   const bar = item.querySelector("progress");
   const state = item.querySelector(".upload-state");
   state.textContent = "確認中…";
@@ -514,6 +635,8 @@ async function pump() {
   state.textContent = "送信中…";
 
   const form = new FormData();
+  // 表示中のフォルダに入れる。name にフォルダ名を含む場合は階層ごと作られる
+  if (folder) form.append("path", folder);
   form.append("file", file, name);
 
   const request = new XMLHttpRequest();
@@ -532,8 +655,9 @@ async function pump() {
     }
     if (request.status >= 200 && request.status < 300) {
       const saved = (payload.saved || [])[0];
+      const expected = folder ? `${folder}/${name}` : name;
       bar.value = 100;
-      state.textContent = saved && saved.name !== name ? `完了(${saved.name} として保存)` : "完了";
+      state.textContent = saved && saved.name !== expected ? `完了(${saved.name} として保存)` : "完了";
       if (saved && saved.backup) state.textContent += ` / 既存ファイルは ${saved.backup} に退避`;
       setTimeout(() => item.remove(), 4000);
     } else {

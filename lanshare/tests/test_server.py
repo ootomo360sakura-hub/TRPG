@@ -1,11 +1,13 @@
 """サーバ全体の結合テスト(実際にHTTPで叩く)。"""
 
 import http.client
+import io
 import json
 import tempfile
 import threading
 import unittest
 import urllib.parse
+import zipfile
 from pathlib import Path
 
 from lanshare.config import ServerConfig
@@ -608,6 +610,124 @@ class AuthSettingsTest(unittest.TestCase):
     def test_no_auth_wins(self):
         self.assertEqual(self.parse(["--no-auth", "--use-pin"]), (False, None))
         self.assertEqual(self.parse(["--no-auth", "--pin", "246810"]), (False, None))
+
+
+class FolderTest(ServerTestCase):
+    """フォルダごとの送受信(階層を保った保存・一覧・ZIP・削除)。"""
+
+    def setUp(self):
+        super().setUp()
+        self.login()
+
+    def upload_to(self, folder, files):
+        """``path`` フィールドで保存先フォルダを指定して送る。"""
+        body = b""
+        if folder:
+            body += (f"--{BOUNDARY}\r\n"
+                     'Content-Disposition: form-data; name="path"\r\n\r\n'
+                     f"{folder}\r\n").encode()
+        for filename, data in files:
+            body += (
+                f"--{BOUNDARY}\r\n"
+                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                "Content-Type: application/octet-stream\r\n\r\n"
+            ).encode()
+            body += data + b"\r\n"
+        body += f"--{BOUNDARY}--\r\n".encode()
+        status, _, raw = self.request(
+            "POST", "/api/upload", body,
+            {"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
+        )
+        return status, json.loads(raw)
+
+    def test_upload_keeps_the_folder_structure(self):
+        status, payload = self.upload_files([("[E]あさひなぐ/01巻/001.jpg", b"page1")])
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["saved"][0]["name"], "[E]あさひなぐ/01巻/001.jpg")
+        self.assertEqual((self.root / "[E]あさひなぐ" / "01巻" / "001.jpg").read_bytes(), b"page1")
+
+    def test_upload_into_the_folder_being_viewed(self):
+        status, payload = self.upload_to("資料/2026", [("メモ.txt", b"x")])
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["saved"][0]["name"], "資料/2026/メモ.txt")
+        self.assertTrue((self.root / "資料" / "2026" / "メモ.txt").is_file())
+
+    def test_upload_cannot_escape_the_share(self):
+        _, payload = self.upload_to("../../etc", [("passwd", b"x")])
+        self.assertEqual(payload["saved"][0]["name"], "etc/passwd")
+        self.assertTrue((self.root / "etc" / "passwd").is_file())
+        self.assertFalse((self.root.parent / "etc").exists())
+
+    def test_listing_a_folder(self):
+        self.upload_files([("[E]あさひなぐ/01巻/001.jpg", b"a"), ("[E]あさひなぐ/表紙.jpg", b"b"), ("メモ.txt", b"c")])
+
+        _, _, top = self.json_request("GET", "/api/files")
+        self.assertEqual(top["path"], "")
+        self.assertIsNone(top["parent"])
+        self.assertEqual([f["name"] for f in top["folders"]], ["[E]あさひなぐ"])
+        self.assertEqual([f["name"] for f in top["files"]], ["メモ.txt"])
+
+        _, _, inner = self.json_request("GET", "/api/files?path=" + urllib.parse.quote("[E]あさひなぐ"))
+        self.assertEqual(inner["path"], "[E]あさひなぐ")
+        self.assertEqual(inner["parent"], "")
+        self.assertEqual([f["name"] for f in inner["folders"]], ["01巻"])
+        self.assertEqual([f["name"] for f in inner["files"]], ["表紙.jpg"])
+
+        _, _, deep = self.json_request("GET", "/api/files?path=" + urllib.parse.quote("[E]あさひなぐ/01巻"))
+        self.assertEqual(deep["parent"], "[E]あさひなぐ")
+
+    def test_listing_a_missing_folder(self):
+        self.assertEqual(self.json_request("GET", "/api/files?path=nope")[0], 404)
+
+    def test_listing_hides_internal_folders(self):
+        self.upload_files([("a.txt", b"x")])
+        self.json_request("POST", "/api/delete", {"name": "a.txt"})
+        _, _, top = self.json_request("GET", "/api/files")
+        self.assertEqual(top["folders"], [])
+        self.assertEqual(self.json_request("GET", "/api/files?path=_trash")[0], 404)
+
+    def test_download_a_file_inside_a_folder(self):
+        self.upload_files([("写真/2026/海.jpg", b"sea")])
+        status, headers, body = self.request("GET", "/files/" + urllib.parse.quote("写真/2026/海.jpg"))
+        self.assertEqual((status, body), (200, b"sea"))
+        self.assertIn(urllib.parse.quote("海.jpg"), headers["Content-Disposition"])
+
+    def test_zip_of_a_folder(self):
+        self.upload_files([("[E]あさひなぐ/01巻/001.jpg", b"page1"), ("[E]あさひなぐ/表紙.jpg", b"cover")])
+        status, headers, body = self.request("GET", "/zip/" + urllib.parse.quote("[E]あさひなぐ"))
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "application/zip")
+        self.assertIn(urllib.parse.quote("[E]あさひなぐ.zip"), headers["Content-Disposition"])
+        archive = zipfile.ZipFile(io.BytesIO(body))
+        self.assertIsNone(archive.testzip())
+        self.assertEqual(
+            sorted(archive.namelist()),
+            ["[E]あさひなぐ/01巻/001.jpg", "[E]あさひなぐ/表紙.jpg"],
+        )
+        self.assertEqual(archive.read("[E]あさひなぐ/表紙.jpg"), b"cover")
+
+    def test_zip_of_everything(self):
+        self.upload_files([("a/1.txt", b"1"), ("b.txt", b"2")])
+        status, _, body = self.request("GET", "/zip")
+        self.assertEqual(status, 200)
+        names = zipfile.ZipFile(io.BytesIO(body)).namelist()
+        self.assertTrue(any(name.endswith("a/1.txt") for name in names))
+        self.assertTrue(any(name.endswith("b.txt") for name in names))
+
+    def test_zip_of_a_missing_folder(self):
+        self.assertEqual(self.request("GET", "/zip/nope")[0], 404)
+
+    def test_zip_requires_auth(self):
+        self.cookie = None
+        self.assertEqual(self.request("GET", "/zip")[0], 401)
+
+    def test_delete_a_folder(self):
+        self.upload_files([("[E]あさひなぐ/01巻/001.jpg", b"a"), ("[E]あさひなぐ/表紙.jpg", b"b")])
+        status, _, payload = self.json_request("POST", "/api/delete", {"names": ["[E]あさひなぐ"]})
+        self.assertEqual(status, 200)
+        self.assertFalse((self.root / "[E]あさひなぐ").exists())
+        moved = self.root / payload["deleted"][0]["trashed"]
+        self.assertTrue((moved / "01巻" / "001.jpg").is_file())
 
 
 if __name__ == "__main__":
