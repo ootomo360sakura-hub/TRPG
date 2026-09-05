@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+import time
+
+
+_OWN_ADDRESSES: set[str] | None = None
+_OWN_ADDRESSES_AT = 0.0
+_OWN_ADDRESSES_TTL = 60.0  # IPが変わっても1分で追従する
 
 
 def primary_address() -> str | None:
@@ -42,6 +48,31 @@ def lan_addresses() -> list[str]:
         return (0 if ip.is_private else 1, address)
 
     return [a for a in sorted(found, key=sort_key) if not a.startswith("169.254.")]
+
+
+def own_addresses() -> set[str]:
+    """このPC自身を指すアドレスの集合(ループバック + LAN側のIP)。"""
+    global _OWN_ADDRESSES, _OWN_ADDRESSES_AT
+    now = time.monotonic()
+    if _OWN_ADDRESSES is None or now - _OWN_ADDRESSES_AT > _OWN_ADDRESSES_TTL:
+        _OWN_ADDRESSES = {"127.0.0.1", "::1", "::ffff:127.0.0.1"} | set(lan_addresses())
+        _OWN_ADDRESSES_AT = now
+    return _OWN_ADDRESSES
+
+
+def is_own_address(address: str) -> bool:
+    """接続元がこのPC自身かどうか(ブラウザをPCで開いた場合)。"""
+    if not address:
+        return False
+    if address in own_addresses():
+        return True
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        return str(ip.ipv4_mapped) in own_addresses()
+    return bool(ip.is_loopback)
 
 
 def is_local_client(address: str) -> bool:

@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-auth", action="store_true", help="PIN認証を無効にする(信頼できるLANのみ)")
     parser.add_argument("--allow-any-client", action="store_true",
                         help="プライベートIP以外からの接続も許可する(通常は不要)")
+    parser.add_argument("--require-local-pin", action="store_true",
+                        help="このPC自身のブラウザにもPIN入力を求める(既定はPIN不要)")
     parser.add_argument("--on-conflict", choices=["rename", "backup"], default="rename",
                         help="同名ファイルの扱い。rename=別名保存(既定) / backup=_backup へ日時つきで退避して上書き")
     parser.add_argument("--hard-delete", action="store_true",
@@ -66,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         pin=None if args.no_auth else (args.pin or generate_pin()),
         require_auth=not args.no_auth,
         allow_any_client=args.allow_any_client,
+        trust_local=not args.require_local_pin,
         on_conflict=args.on_conflict,
         hard_delete=args.hard_delete,
         session_ttl=max(1, args.session_ttl) * 3600,

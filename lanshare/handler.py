@@ -33,7 +33,7 @@ from .auth import SESSION_COOKIE, AuthManager, TooManyAttempts
 from .clips import ClipStore
 from .config import ServerConfig
 from .multipart import MultipartError, MultipartParser, parse_boundary
-from .netinfo import is_local_client, lan_addresses
+from .netinfo import is_local_client, is_own_address, lan_addresses
 from .state import DeviceRegistry, Revision
 from .storage import Store, StorageError
 
@@ -150,7 +150,10 @@ class LanShareHandler(BaseHTTPRequestHandler):
     def _authenticated(self) -> bool:
         token = self._cookie_token()
         if not self.context.auth.is_valid(token):
-            return False
+            # サーバを動かしているPC自身のブラウザはPINなしで通す。
+            # 画面のPINはもともとそのPCのコンソールに出ているため、入力を求めても意味がない。
+            if not (self.context.config.trust_local and is_own_address(self._client())):
+                return False
         self.context.devices.touch(
             self._device_token(token), self._client(), self.headers.get("User-Agent", "")
         )
@@ -294,6 +297,7 @@ class LanShareHandler(BaseHTTPRequestHandler):
             "onConflict": config.on_conflict,
             "hardDelete": config.hard_delete,
             "pin": config.pin if self.context.auth.enabled else None,
+            "localTrusted": config.trust_local,
             "urls": self.context.share_urls(),
             "version": __version__,
         })

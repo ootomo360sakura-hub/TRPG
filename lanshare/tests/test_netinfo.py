@@ -2,7 +2,7 @@
 
 import unittest
 
-from lanshare.netinfo import is_local_client, lan_addresses
+from lanshare.netinfo import is_local_client, is_own_address, lan_addresses, own_addresses
 
 
 class IsLocalClientTest(unittest.TestCase):
@@ -16,6 +16,23 @@ class IsLocalClientTest(unittest.TestCase):
         for address in ("8.8.8.8", "1.1.1.1", "93.184.216.34", "2001:4860:4860::8888", "", "not-an-ip"):
             with self.subTest(address=address):
                 self.assertFalse(is_local_client(address))
+
+
+class IsOwnAddressTest(unittest.TestCase):
+    def test_loopback_is_this_pc(self):
+        for address in ("127.0.0.1", "127.0.0.2", "::1", "::ffff:127.0.0.1"):
+            with self.subTest(address=address):
+                self.assertTrue(is_own_address(address))
+
+    def test_own_lan_address_is_this_pc(self):
+        for address in own_addresses():
+            with self.subTest(address=address):
+                self.assertTrue(is_own_address(address))
+
+    def test_other_devices_are_not(self):
+        for address in ("192.168.99.250", "10.99.99.99", "", "not-an-ip"):
+            with self.subTest(address=address):
+                self.assertFalse(is_own_address(address))
 
 
 class LanAddressesTest(unittest.TestCase):

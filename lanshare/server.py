@@ -40,7 +40,11 @@ def banner(context: AppContext, show_qr: bool = True) -> str:
         "  接続先URL    : " + ("\n                 ".join(context.share_urls())),
     ]
     if context.auth.enabled:
-        lines.append(f"  PIN          : {config.pin}")
+        lines.append(f"  PIN          : {config.pin}   ← iPhoneでURLを手入力したときに使う番号")
+        if config.trust_local:
+            lines.append("                 (このPCのブラウザからはPIN不要。QRで開いたiPhoneも入力不要)")
+        else:
+            lines.append("                 (--require-local-pin 指定のため、このPCでもPINを求めます)")
     else:
         lines.append("  PIN          : なし(--no-auth で認証を無効化しています)")
     lines += [

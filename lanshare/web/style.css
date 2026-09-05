@@ -88,7 +88,16 @@ input[type="text"], textarea {
   border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 8px 0;
 }
 #pin { font-size: 28px; letter-spacing: .5em; text-align: center; font-family: ui-monospace, monospace; }
-.login-card { width: min(360px, 100%); text-align: center; }
+.login-card { width: min(380px, 100%); text-align: center; }
+.console-sample { margin: 14px 0 4px; text-align: left; }
+.console-sample figcaption { font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: .04em; }
+.console-sample pre {
+  margin: 0; padding: 12px; border-radius: 10px; overflow-x: auto;
+  background: #0f172a; color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px; line-height: 1.7;
+}
+.console-sample .hl { color: #fbbf24; font-weight: 700; }
 .login-card button { width: 100%; }
 
 .dropzone {

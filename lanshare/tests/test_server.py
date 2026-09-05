@@ -30,6 +30,7 @@ def multipart(files: list[tuple[str, bytes]]) -> bytes:
 class ServerTestCase(unittest.TestCase):
     on_conflict = "rename"
     hard_delete = False
+    trust_local = False
 
     def setUp(self):
         self._temp = tempfile.TemporaryDirectory()
@@ -37,6 +38,8 @@ class ServerTestCase(unittest.TestCase):
         self.config = ServerConfig(
             root=self.root, host="127.0.0.1", port=0, pin="123456",
             on_conflict=self.on_conflict, hard_delete=self.hard_delete, quiet=True,
+            # テストはPIN認証の流れを確認するため、このPCを信頼する既定を切っておく
+            trust_local=self.trust_local,
         )
         self.server, self.context = create_server(self.config)
         self.config.port = self.server.server_address[1]
@@ -477,6 +480,46 @@ class DeviceStatusTest(ServerTestCase):
         self.login()
         info = self.json_request("GET", "/api/info")[2]
         self.assertEqual(info["pin"], "123456")
+
+
+class LocalTrustTest(ServerTestCase):
+    """サーバを動かしているPC自身のブラウザはPIN入力なしで使える(既定)。"""
+
+    trust_local = True
+
+    def test_no_pin_needed_from_this_pc(self):
+        self.assertEqual(self.request("GET", "/api/files")[0], 200)
+        self.assertEqual(self.request("GET", "/api/status")[0], 200)
+        self.assertEqual(self.upload_files([("a.txt", b"x")])[0], 200)
+        self.assertEqual(self.request("GET", "/files/a.txt")[2], b"x")
+
+    def test_pin_is_still_configured_for_other_devices(self):
+        info = self.json_request("GET", "/api/info")[2]
+        self.assertTrue(info["auth"])
+        self.assertEqual(info["pin"], "123456")
+        self.assertTrue(info["localTrusted"])
+
+    def test_qr_includes_pin_for_the_phone(self):
+        self.assertEqual(self.request("GET", "/qr.png")[0], 200)
+        self.assertIn("pin=123456", self.context.qr_url(with_pin=True))
+
+    def test_device_is_registered_without_login(self):
+        self.request("GET", "/api/status")
+        devices = self.json_request("GET", "/api/status")[2]["devices"]
+        self.assertEqual(len(devices), 1)
+        self.assertTrue(devices[0]["self"])
+
+
+class RequireLocalPinTest(ServerTestCase):
+    """--require-local-pin を付けた場合は、このPCでもPINを求める。"""
+
+    trust_local = False
+
+    def test_pin_required(self):
+        self.assertEqual(self.request("GET", "/api/files")[0], 401)
+        self.assertFalse(self.json_request("GET", "/api/info", auth=False)[2].get("localTrusted", False))
+        self.assertEqual(self.login(), 200)
+        self.assertEqual(self.request("GET", "/api/files")[0], 200)
 
 
 if __name__ == "__main__":
