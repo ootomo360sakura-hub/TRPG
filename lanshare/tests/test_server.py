@@ -36,7 +36,7 @@ class ServerTestCase(unittest.TestCase):
         self._temp = tempfile.TemporaryDirectory()
         self.root = Path(self._temp.name)
         self.config = ServerConfig(
-            root=self.root, host="127.0.0.1", port=0, pin="123456",
+            root=self.root, host="127.0.0.1", port=0, pin="123456", require_auth=True,
             on_conflict=self.on_conflict, hard_delete=self.hard_delete, quiet=True,
             # テストはPIN認証の流れを確認するため、このPCを信頼する既定を切っておく
             trust_local=self.trust_local,
@@ -520,6 +520,94 @@ class RequireLocalPinTest(ServerTestCase):
         self.assertFalse(self.json_request("GET", "/api/info", auth=False)[2].get("localTrusted", False))
         self.assertEqual(self.login(), 200)
         self.assertEqual(self.request("GET", "/api/files")[0], 200)
+
+
+class NoPinDefaultTest(unittest.TestCase):
+    """既定はPINなし。起動しただけで、どの端末からもそのまま使える。"""
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        self.config = ServerConfig(root=self.root, host="127.0.0.1", port=0, quiet=True)
+        self.server, self.context = create_server(self.config)
+        self.config.port = self.server.server_address[1]
+        self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self._thread.start()
+        self.address = f"127.0.0.1:{self.config.port}"
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self._thread.join(timeout=5)
+        self._temp.cleanup()
+
+    def get(self, path, headers=None):
+        conn = http.client.HTTPConnection(self.address, timeout=10)
+        conn.request("GET", path, headers={"X-LanShare": "1", **(headers or {})})
+        response = conn.getresponse()
+        body = response.read()
+        conn.close()
+        return response.status, body
+
+    def test_defaults_to_no_authentication(self):
+        self.assertFalse(self.config.require_auth)
+        self.assertIsNone(self.config.pin)
+        self.assertFalse(self.context.auth.enabled)
+
+    def test_apis_are_open_without_a_pin(self):
+        for path in ("/api/info", "/api/files", "/api/status", "/api/clips"):
+            with self.subTest(path=path):
+                self.assertEqual(self.get(path)[0], 200)
+
+    def test_info_reports_no_pin(self):
+        status, body = self.get("/api/info")
+        info = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertFalse(info["auth"])
+        self.assertIsNone(info["pin"])
+
+    def test_qr_has_no_pin_in_the_url(self):
+        url = self.context.qr_url(with_pin=True)
+        self.assertNotIn("pin=", url)
+        self.assertEqual(self.get("/qr.png")[0], 200)
+
+    def test_upload_and_download_without_a_pin(self):
+        body = multipart([("メモ.txt", "ないしょ".encode())])
+        conn = http.client.HTTPConnection(self.address, timeout=10)
+        conn.request("POST", "/api/upload", body=body, headers={
+            "X-LanShare": "1", "Content-Type": f"multipart/form-data; boundary={BOUNDARY}"})
+        self.assertEqual(conn.getresponse().status, 200)
+        conn.close()
+        self.assertEqual(self.get("/files/" + urllib.parse.quote("メモ.txt"))[1], "ないしょ".encode())
+
+    def test_banner_explains_that_there_is_no_pin(self):
+        text = banner(self.context, show_qr=False)
+        self.assertIn("PIN          : なし", text)
+        self.assertIn("--use-pin", text)
+
+
+class AuthSettingsTest(unittest.TestCase):
+    """コマンドライン引数から認証の有無を決める部分。"""
+
+    def parse(self, argv):
+        from lanshare.__main__ import auth_settings, build_parser
+
+        return auth_settings(build_parser().parse_args(argv))
+
+    def test_default_is_no_pin(self):
+        self.assertEqual(self.parse([]), (False, None))
+
+    def test_use_pin_generates_one(self):
+        enabled, pin = self.parse(["--use-pin"])
+        self.assertTrue(enabled)
+        self.assertRegex(pin, r"^\d{6}$")
+
+    def test_explicit_pin_enables_auth(self):
+        self.assertEqual(self.parse(["--pin", "246810"]), (True, "246810"))
+
+    def test_no_auth_wins(self):
+        self.assertEqual(self.parse(["--no-auth", "--use-pin"]), (False, None))
+        self.assertEqual(self.parse(["--no-auth", "--pin", "246810"]), (False, None))
 
 
 if __name__ == "__main__":

@@ -69,7 +69,7 @@ python -m lanshare              :: ./shared を共有してサーバ起動(標�
 
 ファイルの種類・サイズに制限はない(上限はPCの空き容量)。
 アプリのURLは `http://<PCのIPアドレス>:8765/`。PCのブラウザで開くとQR付きのセットアップ画面、
-iPhoneのカメラでQRを読み取るとPIN入力なしでSafariが開き、
+iPhoneのカメラでQRを読み取るとSafariが開き(PIN入力は不要)、
 接続を検知するとPC側は自動でファイル転送画面に切り替わる。
 オプションやWindowsファイアウォールの設定は **[`lanshare/README.md`](lanshare/README.md)** を参照。
 

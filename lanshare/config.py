@@ -16,7 +16,7 @@ class ServerConfig:
     host: str = "0.0.0.0"
     port: int = DEFAULT_PORT
     pin: str | None = None
-    require_auth: bool = True
+    require_auth: bool = False  # 既定はPINなし(--use-pin で有効化)
     allow_any_client: bool = False
     trust_local: bool = True  # このPC自身からのアクセスはPINなしで通す
     on_conflict: str = "rename"

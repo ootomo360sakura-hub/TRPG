@@ -46,7 +46,9 @@ def banner(context: AppContext, show_qr: bool = True) -> str:
         else:
             lines.append("                 (--require-local-pin 指定のため、このPCでもPINを求めます)")
     else:
-        lines.append("  PIN          : なし(--no-auth で認証を無効化しています)")
+        lines.append("  PIN          : なし(入力せずにそのまま使えます)")
+        lines.append("                 同じWi-Fiにつながっている端末なら誰でも開けます。")
+        lines.append("                 PINで守りたいときは --use-pin を付けて起動してください。")
     lines += [
         "  同名ファイル : " + ("_backup/ に日時つきで退避してから上書き"
                                if config.on_conflict == "backup" else "別名(連番)で保存"),

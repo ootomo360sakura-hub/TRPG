@@ -68,7 +68,7 @@ function showSetup() {
   $("setup-url").textContent = info.urls[0] || "";
   $("setup-pin").textContent = info.pin
     ? `QRが読めないときは、Safariで上のURLを開いてPIN ${info.pin} を入力`
-    : "PIN認証は無効です。上のURLをSafariで開いてください";
+    : "PINの入力は不要です。QRが読めないときは、Safariで上のURLを直接開いてください";
   $("waiting").classList.remove("hidden");
   $("connected-msg").classList.add("hidden");
 }

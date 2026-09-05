@@ -24,14 +24,18 @@ def build_parser() -> argparse.ArgumentParser:
             "例:\n"
             "  python -m lanshare\n"
             "  python -m lanshare --dir \"D:\\共有\" --port 8080\n"
+            "  python -m lanshare --use-pin\n"
             "  python -m lanshare --on-conflict backup\n"
         ),
     )
     parser.add_argument("-d", "--dir", default=DEFAULT_ROOT, help="共有フォルダ(既定: ./shared)")
     parser.add_argument("-p", "--port", type=int, default=DEFAULT_PORT, help=f"待ち受けポート(既定: {DEFAULT_PORT})")
     parser.add_argument("--host", default="0.0.0.0", help="待ち受けアドレス(既定: 0.0.0.0=全てのLAN側IP)")
-    parser.add_argument("--pin", help="PINを固定する(既定: 起動ごとに6桁を自動生成)")
-    parser.add_argument("--no-auth", action="store_true", help="PIN認証を無効にする(信頼できるLANのみ)")
+    parser.add_argument("--use-pin", action="store_true",
+                        help="PIN認証を有効にする(6桁を自動生成。他人と同じWi-Fiを使うときに)")
+    parser.add_argument("--pin", help="PINを指定して認証を有効にする(例: --pin 123456)")
+    parser.add_argument("--no-auth", action="store_true",
+                        help="PIN認証を使わない(既定。同じWi-Fiの端末なら誰でも開ける)")
     parser.add_argument("--allow-any-client", action="store_true",
                         help="プライベートIP以外からの接続も許可する(通常は不要)")
     parser.add_argument("--require-local-pin", action="store_true",
@@ -45,6 +49,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--open", action="store_true", help="起動後にPCのブラウザで開く")
     parser.add_argument("-q", "--quiet", action="store_true", help="アクセスログを表示しない")
     return parser
+
+
+def auth_settings(args: argparse.Namespace) -> tuple[bool, str | None]:
+    """引数から (PIN認証を使うか, PIN) を決める。
+
+    既定はPINなし。``--pin`` または ``--use-pin`` を付けたときだけ有効になり、
+    ``--no-auth`` を明示した場合は常に無効。
+    """
+    if args.no_auth:
+        return (False, None)
+    if args.pin:
+        return (True, args.pin)
+    if args.use_pin:
+        return (True, generate_pin())
+    return (False, None)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,12 +80,14 @@ def main(argv: list[str] | None = None) -> int:
         print("エラー: --pin は数字で指定してください", file=sys.stderr)
         return 2
 
+    require_auth, pin = auth_settings(args)
+
     config = ServerConfig(
         root=Path(args.dir),
         host=args.host,
         port=args.port,
-        pin=None if args.no_auth else (args.pin or generate_pin()),
-        require_auth=not args.no_auth,
+        pin=pin,
+        require_auth=require_auth,
         allow_any_client=args.allow_any_client,
         trust_local=not args.require_local_pin,
         on_conflict=args.on_conflict,
@@ -78,9 +99,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.hard_delete:
         print("警告: --hard-delete が有効です。UIから削除したファイルはPCから即座に消え、"
               "復元できません(既定では _trash/ に退避します)。", file=sys.stderr)
-    if args.no_auth:
-        print("警告: PIN認証が無効です。同じLAN内の誰でも共有フォルダを読み書きできます。",
-              file=sys.stderr)
 
     try:
         serve(config, show_qr=not args.no_qr, open_browser=args.open)
