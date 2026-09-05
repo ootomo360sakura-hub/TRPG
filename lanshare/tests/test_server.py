@@ -283,6 +283,49 @@ class UploadDownloadTest(ServerTestCase):
         self.assertTrue((self.root / payload["trashed"]).is_file())
         self.assertFalse((self.root / "a.txt").exists())
 
+    def test_bulk_delete(self):
+        names = ["a.txt", "b.txt", "写真.HEIC"]
+        self.upload_files([(name, b"x") for name in names])
+        status, _, payload = self.json_request("POST", "/api/delete", {"names": names})
+
+        self.assertEqual(status, 200)
+        self.assertEqual([entry["name"] for entry in payload["deleted"]], names)
+        self.assertEqual(payload["failed"], [])
+        self.assertTrue(payload["trashDir"].startswith("_trash/"))
+        self.assertTrue((self.root / payload["trashDir"]).is_dir())
+        self.assertEqual(self.json_request("GET", "/api/files")[2]["files"], [])
+
+    def test_bulk_delete_reports_partial_failure(self):
+        self.upload_files([("a.txt", b"x")])
+        status, _, payload = self.json_request("POST", "/api/delete", {"names": ["a.txt", "missing.txt"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload["deleted"]), 1)
+        self.assertEqual(payload["failed"][0]["name"], "missing.txt")
+
+    def test_bulk_delete_all_missing_is_an_error(self):
+        self.assertEqual(self.json_request("POST", "/api/delete", {"names": ["x.txt", "y.txt"]})[0], 400)
+
+    def test_bulk_delete_rejects_empty_and_oversized_requests(self):
+        self.assertEqual(self.json_request("POST", "/api/delete", {"names": []})[0], 400)
+        self.assertEqual(self.json_request("POST", "/api/delete", {"names": "a.txt"})[0], 400)
+        status, _, payload = self.json_request(
+            "POST", "/api/delete", {"names": [f"{i}.txt" for i in range(5001)]}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("5,000件", payload["error"])
+
+    def test_bulk_delete_bumps_revision(self):
+        self.upload_files([("a.txt", b"x"), ("b.txt", b"x")])
+        before = self.json_request("GET", "/api/status")[2]["revision"]
+        self.json_request("POST", "/api/delete", {"names": ["a.txt", "b.txt"]})
+        self.assertGreater(self.json_request("GET", "/api/status")[2]["revision"], before)
+
+    def test_single_delete_response_is_unchanged(self):
+        self.upload_files([("a.txt", b"x")])
+        _, _, payload = self.json_request("POST", "/api/delete", {"name": "a.txt"})
+        self.assertEqual(payload["name"], "a.txt")
+        self.assertTrue((self.root / payload["trashed"]).is_file())
+
     def test_delete_rejects_traversal(self):
         self.assertEqual(self.json_request("POST", "/api/delete", {"name": "../x"})[0], 400)
 

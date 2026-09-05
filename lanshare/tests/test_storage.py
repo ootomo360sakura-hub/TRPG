@@ -79,6 +79,45 @@ class StoreTest(unittest.TestCase):
         self.assertIsNone(store.delete("a.txt")["trashed"])
         self.assertFalse((self.root / TRASH_DIR).exists())
 
+    def test_delete_many_groups_into_one_trash_folder(self):
+        store = Store(self.root)
+        for name in ("a.txt", "b.txt", "c.txt"):
+            store.save(name, [b"x"])
+        result = store.delete_many(["a.txt", "b.txt", "c.txt"])
+
+        self.assertEqual([entry["name"] for entry in result["deleted"]], ["a.txt", "b.txt", "c.txt"])
+        self.assertEqual(result["failed"], [])
+        self.assertEqual(list(store.list_files()), [])
+        trash = self.root / result["trash_dir"]
+        self.assertTrue(trash.is_dir())
+        self.assertEqual(sorted(p.name for p in trash.iterdir()), ["a.txt", "b.txt", "c.txt"])
+        # 退避先は1つの日時フォルダにまとまる
+        self.assertEqual(len(list((self.root / TRASH_DIR).iterdir())), 1)
+
+    def test_delete_many_continues_after_failure(self):
+        store = Store(self.root)
+        store.save("keep.txt", [b"x"])
+        store.save("gone.txt", [b"x"])
+        result = store.delete_many(["gone.txt", "missing.txt", "../etc/passwd", "keep.txt"])
+
+        self.assertEqual([entry["name"] for entry in result["deleted"]], ["gone.txt", "keep.txt"])
+        self.assertEqual([entry["name"] for entry in result["failed"]], ["missing.txt", "../etc/passwd"])
+        self.assertTrue(all(entry["error"] for entry in result["failed"]))
+        self.assertEqual(list(store.list_files()), [])
+
+    def test_delete_many_hard_delete(self):
+        store = Store(self.root, hard_delete=True)
+        store.save("a.txt", [b"x"])
+        store.save("b.txt", [b"x"])
+        result = store.delete_many(["a.txt", "b.txt"])
+        self.assertIsNone(result["trash_dir"])
+        self.assertTrue(all(entry["trashed"] is None for entry in result["deleted"]))
+        self.assertFalse((self.root / TRASH_DIR).exists())
+
+    def test_delete_many_empty(self):
+        result = Store(self.root).delete_many([])
+        self.assertEqual(result, {"deleted": [], "failed": [], "trash_dir": None})
+
     def test_delete_missing(self):
         with self.assertRaises(StorageError):
             Store(self.root).delete("nope.txt")

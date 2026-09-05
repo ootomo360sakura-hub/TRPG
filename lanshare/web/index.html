@@ -80,7 +80,22 @@
 
       <div class="list-head">
         <h2>共有中のファイル <span id="file-count" class="muted"></span></h2>
-        <button id="refresh" class="ghost" type="button">更新</button>
+        <div class="head-actions">
+          <button id="select-mode" class="ghost" type="button">選択</button>
+          <button id="refresh" class="ghost" type="button">更新</button>
+        </div>
+      </div>
+
+      <div id="bulk-bar" class="bulk-bar hidden">
+        <label class="check">
+          <input type="checkbox" id="select-all">
+          <span>すべて選択</span>
+        </label>
+        <span id="selected-count" class="muted small"></span>
+        <div class="bulk-actions">
+          <button id="delete-selected" class="danger" type="button" disabled>まとめて削除</button>
+          <button id="exit-select" class="ghost" type="button">やめる</button>
+        </div>
       </div>
       <ul id="files" class="files"></ul>
       <p id="files-empty" class="muted empty hidden">まだファイルがありません。</p>

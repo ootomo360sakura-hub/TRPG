@@ -10,7 +10,7 @@
 * GET  /files/<name>         ダウンロード(Rangeリクエスト対応)
 * POST /api/login /logout    PIN認証
 * POST /api/upload           multipartアップロード(逐次書き込み、種類・サイズの制限なし)
-* POST /api/delete           削除(既定はゴミ箱へ退避)
+* POST /api/delete           削除(1件でも複数でも可。既定はゴミ箱へ退避)
 * GET/POST /api/clips        テキスト共有
 """
 
@@ -38,7 +38,8 @@ from .state import DeviceRegistry, Revision
 from .storage import Store, StorageError
 
 WEB_DIR = Path(__file__).parent / "web"
-MAX_JSON_BYTES = 1024 * 1024  # テキスト共有の本文を通すための余裕。ファイル転送はこの制限を通らない
+MAX_JSON_BYTES = 1024 * 1024
+MAX_DELETE_COUNT = 5000  # 一度の要求で削除できる件数の上限  # テキスト共有の本文を通すための余裕。ファイル転送はこの制限を通らない
 STREAM_CHUNK = 256 * 1024
 
 
@@ -388,16 +389,40 @@ class LanShareHandler(BaseHTTPRequestHandler):
         self._json({"saved": saved})
 
     def _api_delete(self) -> None:
+        """1件(``name``)または複数(``names``)のファイルを削除する。"""
         try:
             payload = self._read_json()
-            result = self.context.store.delete(str(payload.get("name", "")))
-        except (ValueError, StorageError) as error:
+        except ValueError as error:
             return self._error(HTTPStatus.BAD_REQUEST, str(error))
+
+        raw = payload.get("names")
+        if raw is None:
+            raw = [payload.get("name", "")]
+        if not isinstance(raw, list) or not raw:
+            return self._error(HTTPStatus.BAD_REQUEST, "削除するファイルが指定されていません")
+        if len(raw) > MAX_DELETE_COUNT:
+            return self._error(
+                HTTPStatus.BAD_REQUEST, f"一度に削除できるのは{MAX_DELETE_COUNT:,}件までです"
+            )
+
+        result = self.context.store.delete_many(str(name) for name in raw)
+        if not result["deleted"]:
+            return self._error(HTTPStatus.BAD_REQUEST, result["failed"][0]["error"])
+
         self.context.revision.bump()
         self.log_message(
-            "DELETE %s -> %s", result["name"], result["trashed"] or "完全削除"
+            "DELETE %d件 -> %s", len(result["deleted"]), result["trash_dir"] or "完全削除"
         )
-        self._json({"ok": True, **result})
+        response = {
+            "ok": True,
+            "deleted": result["deleted"],
+            "failed": result["failed"],
+            "trashDir": result["trash_dir"],
+        }
+        if len(result["deleted"]) == 1 and not result["failed"]:
+            # 1件だけのときは従来どおり name / trashed(退避先のファイル)も返す
+            response.update(result["deleted"][0])
+        self._json(response)
 
     def _api_clips(self) -> None:
         if not self._authenticated():

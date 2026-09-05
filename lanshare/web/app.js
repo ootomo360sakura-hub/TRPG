@@ -6,6 +6,8 @@ const HEADERS = { "X-LanShare": "1" };
 let info = { auth: false, root: "", hardDelete: false, onConflict: "rename", urls: [] };
 let view = "login";        // login / setup / app
 let lastRevision = null;   // 共有フォルダの更新回数(変わったら一覧を読み直す)
+let selectMode = false;    // まとめて削除のための選択モード
+const selected = new Set();
 let pollTimer = null;
 
 /* ---------- 共通ユーティリティ ---------- */
@@ -240,6 +242,10 @@ async function loadFiles() {
   const data = await api("/api/files");
   const list = $("files");
   list.innerHTML = "";
+  const available = new Set(data.files.map((file) => file.name));
+  for (const name of Array.from(selected)) {
+    if (!available.has(name)) selected.delete(name);
+  }
   const free = data.freeSpace ? `空き ${formatSize(data.freeSpace)}` : "";
   $("file-count").textContent = data.files.length
     ? `(${data.files.length}件 / ${formatSize(data.totalSize)}${free ? " ・ " + free : ""})`
@@ -250,6 +256,22 @@ async function loadFiles() {
     const item = document.createElement("li");
     const row = document.createElement("div");
     row.className = "file-row";
+
+    if (selectMode) {
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "file-check";
+      check.checked = selected.has(file.name);
+      check.setAttribute("aria-label", `${file.name} を選択`);
+      check.addEventListener("change", () => {
+        if (check.checked) selected.add(file.name);
+        else selected.delete(file.name);
+        item.classList.toggle("picked", check.checked);
+        updateBulkBar();
+      });
+      item.classList.toggle("picked", check.checked);
+      row.append(check);
+    }
 
     const main = document.createElement("div");
     main.className = "file-main";
@@ -282,7 +304,70 @@ async function loadFiles() {
     item.append(row);
     list.append(item);
   }
+  updateBulkBar();
 }
+
+/* ---------- まとめて削除 ---------- */
+
+function currentNames() {
+  return Array.from($("files").querySelectorAll(".file-name")).map((link) => link.textContent);
+}
+
+function updateBulkBar() {
+  const names = currentNames();
+  $("bulk-bar").classList.toggle("hidden", !selectMode);
+  $("select-mode").textContent = selectMode ? "選択中" : "選択";
+  if (!selectMode) return;
+  $("selected-count").textContent = `${selected.size} / ${names.length} 件を選択中`;
+  $("delete-selected").disabled = selected.size === 0;
+  $("delete-selected").textContent =
+    selected.size > 0 ? `選択した${selected.size}件を削除` : "まとめて削除";
+  $("select-all").checked = names.length > 0 && selected.size === names.length;
+}
+
+function setSelectMode(on) {
+  selectMode = on;
+  if (!on) selected.clear();
+  loadFiles().catch(() => {});
+}
+
+$("select-mode").addEventListener("click", () => setSelectMode(!selectMode));
+$("exit-select").addEventListener("click", () => setSelectMode(false));
+
+$("select-all").addEventListener("change", (event) => {
+  selected.clear();
+  if (event.target.checked) currentNames().forEach((name) => selected.add(name));
+  loadFiles().catch(() => {});
+});
+
+$("delete-selected").addEventListener("click", async () => {
+  const names = Array.from(selected);
+  if (!names.length) return;
+  const preview = names.slice(0, 5).map((name) => `・${name}`).join("\n");
+  const rest = names.length > 5 ? `\n・ほか ${names.length - 5} 件` : "";
+  const detail = info.hardDelete
+    ? "この操作でPC内のファイルを完全に削除します。元に戻せません。"
+    : "この操作でPC内の共有フォルダからファイルを削除します(_trash/ の同じ日時フォルダにまとめて移動するので、PC側で復元できます)。";
+  if (!confirm(`${names.length}件のファイルを削除しますか?\n\n${preview}${rest}\n\n${detail}`)) return;
+
+  $("delete-selected").disabled = true;
+  try {
+    const result = await api("/api/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    const done = (result.deleted || []).length;
+    const failed = (result.failed || []).length;
+    let message = result.trashDir ? `${done}件を削除しました(${result.trashDir} に退避)` : `${done}件を完全に削除しました`;
+    if (failed) message += ` / ${failed}件は削除できませんでした`;
+    toast(message, 4000);
+    setSelectMode(false);
+  } catch (error) {
+    toast(error.message);
+    updateBulkBar();
+  }
+});
 
 async function deleteFile(file) {
   const detail = info.hardDelete

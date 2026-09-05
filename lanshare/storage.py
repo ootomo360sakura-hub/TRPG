@@ -193,23 +193,52 @@ class Store:
 
     # --- 削除 ---
 
+    def delete_many(self, names: Iterable[str]) -> dict:
+        """複数のファイルをまとめて削除する。
+
+        既定では ``_trash/日時/`` へ退避するだけで、実ファイルは残す。
+        1回の呼び出しで消したものは同じ日時フォルダにまとめるので、
+        あとからエクスプローラーでフォルダごと戻せる。
+        削除できなかったものは ``failed`` に理由付きで返し、途中で止めない。
+        """
+        deleted: list[dict] = []
+        failed: list[dict] = []
+        trash_dir: Path | None = None
+
+        for name in names:
+            try:
+                path = self.resolve(name)
+                if not path.is_file():
+                    raise StorageError("ファイルが見つかりません")
+                if self.hard_delete:
+                    path.unlink()
+                    deleted.append({"name": name, "trashed": None})
+                    continue
+                if trash_dir is None:
+                    trash_dir = self.root / TRASH_DIR / timestamp()
+                    trash_dir.mkdir(parents=True, exist_ok=True)
+                target = trash_dir / path.name
+                index = 1
+                while target.exists():
+                    target = trash_dir / f"{index}-{path.name}"
+                    index += 1
+                shutil.move(str(path), str(target))
+                deleted.append({"name": name, "trashed": str(target.relative_to(self.root))})
+            except (StorageError, OSError) as error:
+                failed.append({"name": name, "error": str(error)})
+
+        return {
+            "deleted": deleted,
+            "failed": failed,
+            "trash_dir": str(trash_dir.relative_to(self.root)) if trash_dir else None,
+        }
+
     def delete(self, name: str) -> dict:
-        """ファイルを削除する。既定では ``_trash/日時/`` へ退避するだけ。"""
-        path = self.resolve(name)
-        if not path.is_file():
-            raise StorageError("ファイルが見つかりません")
-        if self.hard_delete:
-            path.unlink()
-            return {"name": name, "trashed": None}
-        trash_dir = self.root / TRASH_DIR / timestamp()
-        trash_dir.mkdir(parents=True, exist_ok=True)
-        target = trash_dir / name
-        index = 1
-        while target.exists():
-            target = trash_dir / f"{index}-{name}"
-            index += 1
-        shutil.move(str(path), str(target))
-        return {"name": name, "trashed": str(target.relative_to(self.root))}
+        """ファイル1件を削除する。既定では ``_trash/日時/`` へ退避するだけ。"""
+        result = self.delete_many([name])
+        if result["failed"]:
+            raise StorageError(result["failed"][0]["error"])
+        return result["deleted"][0]
 
     # --- 読み出し ---
 
