@@ -1,0 +1,7 @@
+services:
+  recruit-bot:
+    build: .
+    env_file: .env
+    restart: unless-stopped   # 落ちても・サーバー再起動後も自動で立ち上がる
+    volumes:
+      - ./data:/app/data      # 募集データ(SQLite)をコンテナの外に保存

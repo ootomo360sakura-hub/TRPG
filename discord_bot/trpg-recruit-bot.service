@@ -1,0 +1,16 @@
+# Dockerを使わずに systemd で常駐させる場合の設定例
+# /etc/systemd/system/ に置き、User と パス を環境に合わせて書き換える
+[Unit]
+Description=TRPG recruitment Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=trpgbot
+WorkingDirectory=/opt/TRPG/discord_bot
+ExecStart=/opt/TRPG/discord_bot/.venv/bin/python bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

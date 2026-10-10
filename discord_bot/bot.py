@@ -1,19 +1,21 @@
 """TRPGプレイヤー募集Bot
 
-/募集 で募集記事(Embed)を投稿し、参加リアクションを付けた人のメンションを
-記事内の「参加者」欄に自動で書き加える。
-
-募集の状態(GM・定員・参加者の並び順)はすべて記事のEmbed自体に持たせているので、
-Botを再起動しても既存の募集記事はそのまま動き続ける。
+- /募集 → フォームで基本項目を入力 → 下書きで追加項目・リマインド有無を決めて投稿
+- ✋(参加希望)/👀(興味あり)のリアクションをした人のメンションを記事内に書き加える
+- 参加希望が定員に達したら自動で締切(👀興味ありは引き続き受付)
+- リマインドありの募集は、開催1週間前と前日(24時間前)に参加者へメンションで通知
+- 投稿者は記事の「GMメニュー」から内容編集・リマインド切替・募集取消ができる
 """
 
 import asyncio
+import logging
 import os
-import re
+import time
 from collections import defaultdict
 
 import discord
 from discord import app_commands
+from discord.ext import tasks
 
 try:
     from dotenv import load_dotenv
@@ -22,131 +24,26 @@ try:
 except ImportError:
     pass
 
-JOIN_EMOJI = "✋"
+from render import DAY, INTEREST_EMOJI, JOIN_EMOJI, WEEK, build_embed
+from store import Recruitment, Store
+from ui import BasicModal, GmMenuView
 
-FOOTER_OPEN = f"{JOIN_EMOJI} リアクションで参加 / 外すと参加取消"
-FOOTER_CLOSED = "この募集は締め切られました"
-TITLE_PREFIX = "【TRPG募集】"
-CLOSED_PREFIX = "【締切】"
+log = logging.getLogger("recruit-bot")
 
-FIELD_GM = "GM"
-FIELD_DATE = "日時"
-FIELD_SYSTEM = "システム"
-FIELD_CAPACITY = "定員"
-FIELD_MEMBERS = "参加者"
-FIELD_WAITLIST = "補欠"
-
-COLOR_OPEN = discord.Color.green()
-COLOR_FULL = discord.Color.orange()
-COLOR_CLOSED = discord.Color.dark_grey()
-
-MENTION_RE = re.compile(r"<@!?(\d+)>")
-
-
-def parse_ids(text: str | None) -> list[int]:
-    return [int(m) for m in MENTION_RE.findall(text or "")]
-
-
-def is_recruitment(message: discord.Message, bot_user: discord.ClientUser) -> bool:
-    if message.author.id != bot_user.id or not message.embeds:
-        return False
-    title = message.embeds[0].title or ""
-    return title.startswith(TITLE_PREFIX) or title.startswith(CLOSED_PREFIX)
-
-
-def is_closed(embed: discord.Embed) -> bool:
-    return (embed.title or "").startswith(CLOSED_PREFIX)
-
-
-def get_field(embed: discord.Embed, name: str) -> str | None:
-    for field in embed.fields:
-        if field.name.startswith(name):
-            return field.value
-    return None
-
-
-def get_capacity(embed: discord.Embed) -> int:
-    value = get_field(embed, FIELD_CAPACITY) or ""
-    m = re.search(r"\d+", value)
-    return int(m.group()) if m else 0
-
-
-def build_embed(
-    *,
-    title: str,
-    gm_id: int,
-    capacity: int,
-    date: str | None,
-    system: str | None,
-    details: str | None,
-    participants: list[int],
-    closed: bool = False,
-) -> discord.Embed:
-    members = participants[:capacity]
-    waitlist = participants[capacity:]
-    full = len(members) >= capacity
-
-    if closed:
-        color = COLOR_CLOSED
-        prefix = CLOSED_PREFIX
-    else:
-        color = COLOR_FULL if full else COLOR_OPEN
-        prefix = TITLE_PREFIX
-
-    embed = discord.Embed(title=f"{prefix}{title}", description=details or None, color=color)
-    embed.add_field(name=FIELD_GM, value=f"<@{gm_id}>", inline=True)
-    if date:
-        embed.add_field(name=FIELD_DATE, value=date, inline=True)
-    if system:
-        embed.add_field(name=FIELD_SYSTEM, value=system, inline=True)
-    embed.add_field(name=FIELD_CAPACITY, value=f"{capacity}名", inline=True)
-
-    status = " (満員)" if full and not closed else ""
-    embed.add_field(
-        name=f"{FIELD_MEMBERS} {len(members)}/{capacity}{status}",
-        value="\n".join(f"<@{uid}>" for uid in members) or "まだいません",
-        inline=False,
-    )
-    if waitlist:
-        embed.add_field(
-            name=f"{FIELD_WAITLIST} {len(waitlist)}名",
-            value="\n".join(f"<@{uid}>" for uid in waitlist),
-            inline=False,
-        )
-    embed.set_footer(text=FOOTER_CLOSED if closed else FOOTER_OPEN)
-    return embed
-
-
-def rebuild_from(embed: discord.Embed, participants: list[int], closed: bool) -> discord.Embed:
-    """既存の募集Embedの基本情報を引き継ぎ、参加者だけ差し替えたEmbedを作る。"""
-    raw_title = embed.title or ""
-    for prefix in (TITLE_PREFIX, CLOSED_PREFIX):
-        if raw_title.startswith(prefix):
-            raw_title = raw_title[len(prefix):]
-            break
-    gm_ids = parse_ids(get_field(embed, FIELD_GM))
-    return build_embed(
-        title=raw_title,
-        gm_id=gm_ids[0] if gm_ids else 0,
-        capacity=get_capacity(embed),
-        date=get_field(embed, FIELD_DATE),
-        system=get_field(embed, FIELD_SYSTEM),
-        details=embed.description,
-        participants=participants,
-        closed=closed,
-    )
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "recruit.db"))
 
 
 class RecruitBot(discord.Client):
     def __init__(self) -> None:
         # リアクションイベントと既定のギルド情報だけで動く(特権インテント不要)
-        intents = discord.Intents.default()
-        super().__init__(intents=intents)
+        super().__init__(intents=discord.Intents.default())
         self.tree = app_commands.CommandTree(self)
-        # 同じ記事に連続でリアクションされても編集が競合しないよう記事ごとに直列化
+        self.store = Store(DB_PATH)
+        # 同じ記事への同時操作で編集が競合しないよう記事ごとに直列化
         self.locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def setup_hook(self) -> None:
+        self.add_view(GmMenuView())  # 再起動前に投稿した記事のボタンも有効にする
         guild_id = os.getenv("GUILD_ID")
         if guild_id:
             guild = discord.Object(id=int(guild_id))
@@ -154,9 +51,46 @@ class RecruitBot(discord.Client):
             await self.tree.sync(guild=guild)
         else:
             await self.tree.sync()
+        self.reminder_loop.start()
 
     async def on_ready(self) -> None:
-        print(f"ログインしました: {self.user} (id={self.user.id})")
+        log.info("ログインしました: %s (id=%s)", self.user, self.user.id)
+
+    # ------------------------------------------------------------ 記事の更新
+
+    async def fetch_post(self, rec: Recruitment) -> discord.Message | None:
+        try:
+            channel = self.get_channel(rec.channel_id) or await self.fetch_channel(rec.channel_id)
+            return await channel.fetch_message(rec.message_id)
+        except (discord.NotFound, discord.Forbidden):
+            return None
+
+    async def save_and_refresh(self, rec: Recruitment, message: discord.Message | None = None) -> None:
+        """DBに保存し、募集記事の表示とBot自身の✋リアクションを最新状態にする。"""
+        self.store.save(rec)
+        message = message or await self.fetch_post(rec)
+        if message is None:
+            return
+        await message.edit(embed=build_embed(rec), view=None if rec.cancelled else GmMenuView())
+
+        # 満員(締切)の間はBotの✋を外して受付終了を示し、空きが出たら付け直す
+        bot_has_join = any(str(r.emoji) == JOIN_EMOJI and r.me for r in message.reactions)
+        want_join = not rec.cancelled and not rec.is_full
+        if bot_has_join and not want_join:
+            await message.remove_reaction(JOIN_EMOJI, self.user)
+        elif want_join and not bot_has_join:
+            await message.add_reaction(JOIN_EMOJI)
+
+    async def notify(self, rec: Recruitment, text: str, include_gm: bool = False) -> None:
+        """募集記事への返信として、参加希望者にメンション付きで知らせる。"""
+        message = await self.fetch_post(rec)
+        if message is None:
+            return
+        targets = rec.participants + ([rec.gm_id] if include_gm and rec.gm_id not in rec.participants else [])
+        body = text if not targets else f"{text}\n{' '.join(f'<@{u}>' for u in targets)}"
+        await message.reply(body, allowed_mentions=discord.AllowedMentions(users=True), mention_author=False)
+
+    # ------------------------------------------------------------ リアクション
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         await self.handle_reaction(payload)
@@ -165,107 +99,92 @@ class RecruitBot(discord.Client):
         await self.handle_reaction(payload)
 
     async def handle_reaction(self, payload: discord.RawReactionActionEvent) -> None:
-        if str(payload.emoji) != JOIN_EMOJI or payload.user_id == self.user.id:
+        if str(payload.emoji) not in (JOIN_EMOJI, INTEREST_EMOJI) or payload.user_id == self.user.id:
             return
-        channel = self.get_channel(payload.channel_id) or await self.fetch_channel(payload.channel_id)
         async with self.locks[payload.message_id]:
-            try:
-                message = await channel.fetch_message(payload.message_id)
-            except discord.NotFound:
+            rec = self.store.get(payload.message_id)
+            if rec is None or rec.cancelled:
                 return
-            if not is_recruitment(message, self.user):
+            message = await self.fetch_post(rec)
+            if message is None:
                 return
-            await self.sync_participants(message)
+            await self.sync_reactions(rec, message)
 
-    async def sync_participants(self, message: discord.Message) -> None:
-        """記事の参加者欄を、実際に付いているリアクションと一致させる。"""
-        embed = message.embeds[0]
-        if is_closed(embed):
-            return
-
-        gm_ids = parse_ids(get_field(embed, FIELD_GM))
-        reacted: list[int] = []
+    async def sync_reactions(self, rec: Recruitment, message: discord.Message) -> None:
+        """記事に実際に付いているリアクションと、DBの参加者・興味あり一覧を一致させる。"""
+        reacted: dict[str, list[int]] = {JOIN_EMOJI: [], INTEREST_EMOJI: []}
         for reaction in message.reactions:
-            if str(reaction.emoji) == JOIN_EMOJI:
+            key = str(reaction.emoji)
+            if key in reacted:
                 async for user in reaction.users():
-                    if not user.bot and user.id not in gm_ids:
-                        reacted.append(user.id)
-                break
+                    if not user.bot and user.id != rec.gm_id:
+                        reacted[key].append(user.id)
 
-        # 記事に載っている順番(=リアクションした順)を保ちつつ、外した人を除き、新しい人を末尾に追加
-        current = parse_ids(get_field(embed, FIELD_MEMBERS)) + parse_ids(get_field(embed, FIELD_WAITLIST))
-        reacted_set = set(reacted)
-        ordered = [uid for uid in current if uid in reacted_set]
-        ordered += [uid for uid in reacted if uid not in ordered]
+        def merge(current: list[int], now: list[int]) -> list[int]:
+            # 記録済みの順番(=リアクションした順)を保ち、外した人を除いて新しい人を末尾に足す
+            kept = [u for u in current if u in now]
+            return kept + [u for u in now if u not in kept]
 
-        if ordered == current:
+        participants = merge(rec.participants, reacted[JOIN_EMOJI])
+        interested = [u for u in merge(rec.interested, reacted[INTEREST_EMOJI]) if u not in participants]
+        if participants == rec.participants and interested == rec.interested:
             return
-        await message.edit(embed=rebuild_from(embed, ordered, closed=False))
+        rec.participants, rec.interested = participants, interested
+        await self.save_and_refresh(rec, message)
+
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
+        self.store.delete(payload.message_id)
+
+    # ------------------------------------------------------------ リマインド
+
+    @tasks.loop(minutes=1)
+    async def reminder_loop(self) -> None:
+        now = int(time.time())
+        week, day = int(WEEK.total_seconds()), int(DAY.total_seconds())
+        for rec in self.store.pending_reminders(now):
+            async with self.locks[rec.message_id]:
+                rec = self.store.get(rec.message_id)
+                if rec is None or rec.cancelled or not rec.reminder:
+                    continue
+                try:
+                    if not rec.day_sent and now >= rec.start_at - day:
+                        # Bot停止などで1週間前の分を逃していたら、前日分だけ送る
+                        rec.week_sent = rec.day_sent = True
+                        await self.notify(rec, self.reminder_text(rec, "明日"), include_gm=True)
+                    elif not rec.week_sent and now >= rec.start_at - week:
+                        rec.week_sent = True
+                        await self.notify(rec, self.reminder_text(rec, "1週間後"), include_gm=True)
+                    else:
+                        continue
+                except discord.HTTPException:
+                    log.exception("リマインド送信に失敗しました: %s", rec.message_id)
+                    continue
+                self.store.save(rec)
+
+    @reminder_loop.before_loop
+    async def before_reminder_loop(self) -> None:
+        await self.wait_until_ready()
+
+    @staticmethod
+    def reminder_text(rec: Recruitment, when: str) -> str:
+        return f"🔔 **リマインド** 「{rec.title}」は{when}、<t:{rec.start_at}:F> 開催です!"
 
 
 bot = RecruitBot()
 
 
-@bot.tree.command(name="募集", description="TRPGのプレイヤー募集記事を投稿します")
+@bot.tree.command(name="募集", description="TRPGのプレイヤー募集記事を作成します")
 @app_commands.guild_only()
-@app_commands.rename(title="タイトル", capacity="定員", date="日時", system="システム", details="詳細")
-@app_commands.describe(
-    title="シナリオ名・卓の名前",
-    capacity="募集するプレイヤー人数(GMを除く)",
-    date="開催日時(例: 10/20(日) 21:00〜)",
-    system="ゲームシステム(例: CoC6版)",
-    details="募集の詳細・注意事項など",
-)
-async def recruit(
-    interaction: discord.Interaction,
-    title: str,
-    capacity: app_commands.Range[int, 1, 20],
-    date: str | None = None,
-    system: str | None = None,
-    details: str | None = None,
-) -> None:
-    embed = build_embed(
-        title=title,
-        gm_id=interaction.user.id,
-        capacity=capacity,
-        date=date,
-        system=system,
-        details=details,
-        participants=[],
-    )
-    await interaction.response.send_message(embed=embed)
-    message = await interaction.original_response()
-    await message.add_reaction(JOIN_EMOJI)
-
-
-@bot.tree.context_menu(name="募集を締め切る")
-@app_commands.guild_only()
-async def close_recruitment(interaction: discord.Interaction, message: discord.Message) -> None:
-    if not is_recruitment(message, bot.user):
-        await interaction.response.send_message("これは募集記事ではありません。", ephemeral=True)
-        return
-    embed = message.embeds[0]
-    if is_closed(embed):
-        await interaction.response.send_message("この募集はすでに締め切られています。", ephemeral=True)
-        return
-    gm_ids = parse_ids(get_field(embed, FIELD_GM))
-    perms = interaction.channel.permissions_for(interaction.user)
-    if interaction.user.id not in gm_ids and not perms.manage_messages:
-        await interaction.response.send_message("締め切れるのはGM(募集者)だけです。", ephemeral=True)
-        return
-
-    await interaction.response.defer(ephemeral=True)
-    async with bot.locks[message.id]:
-        participants = parse_ids(get_field(embed, FIELD_MEMBERS)) + parse_ids(get_field(embed, FIELD_WAITLIST))
-        await message.edit(embed=rebuild_from(embed, participants, closed=True))
-    await interaction.followup.send("募集を締め切りました。", ephemeral=True)
+async def recruit(interaction: discord.Interaction) -> None:
+    await interaction.response.send_modal(BasicModal())
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     token = os.getenv("DISCORD_TOKEN")
     if not token:
         raise SystemExit("環境変数 DISCORD_TOKEN が設定されていません(.env を確認してください)")
-    bot.run(token)
+    bot.run(token, log_handler=None)
 
 
 if __name__ == "__main__":
