@@ -2,8 +2,8 @@
 
 - /募集 → フォームで基本項目を入力 → 下書きで追加項目・リマインド有無を決めて投稿
 - ✋(参加希望)/👀(興味あり)のリアクションをした人のメンションを記事内に書き加える
-- 参加希望が定員に達したら自動で締切(👀興味ありは引き続き受付)
-- リマインドありの募集は、開催1週間前と前日(24時間前)に参加者へメンションで通知
+- 参加希望が定員に達したら自動で締切(👀興味ありは引き続き受付。締切後の✋は「定員超過(GM判断)」に記載)
+- リマインドありの募集は、開催1週間前と前日の午前9時に参加者へメンションで通知
 - 投稿者は記事の「GMメニュー」から内容編集・リマインド切替・募集取消ができる
 """
 
@@ -24,7 +24,7 @@ try:
 except ImportError:
     pass
 
-from render import DAY, INTEREST_EMOJI, JOIN_EMOJI, WEEK, build_embed
+from render import INTEREST_EMOJI, JOIN_EMOJI, build_embed, reminder_times
 from store import Recruitment, Store
 from ui import BasicModal, GmMenuView
 
@@ -66,20 +66,12 @@ class RecruitBot(discord.Client):
             return None
 
     async def save_and_refresh(self, rec: Recruitment, message: discord.Message | None = None) -> None:
-        """DBに保存し、募集記事の表示とBot自身の✋リアクションを最新状態にする。"""
+        """DBに保存し、募集記事の表示を最新状態にする。"""
         self.store.save(rec)
         message = message or await self.fetch_post(rec)
         if message is None:
             return
         await message.edit(embed=build_embed(rec), view=None if rec.cancelled else GmMenuView())
-
-        # 満員(締切)の間はBotの✋を外して受付終了を示し、空きが出たら付け直す
-        bot_has_join = any(str(r.emoji) == JOIN_EMOJI and r.me for r in message.reactions)
-        want_join = not rec.cancelled and not rec.is_full
-        if bot_has_join and not want_join:
-            await message.remove_reaction(JOIN_EMOJI, self.user)
-        elif want_join and not bot_has_join:
-            await message.add_reaction(JOIN_EMOJI)
 
     async def notify(self, rec: Recruitment, text: str, include_gm: bool = False) -> None:
         """募集記事への返信として、参加希望者にメンション付きで知らせる。"""
@@ -140,18 +132,18 @@ class RecruitBot(discord.Client):
     @tasks.loop(minutes=1)
     async def reminder_loop(self) -> None:
         now = int(time.time())
-        week, day = int(WEEK.total_seconds()), int(DAY.total_seconds())
         for rec in self.store.pending_reminders(now):
             async with self.locks[rec.message_id]:
                 rec = self.store.get(rec.message_id)
                 if rec is None or rec.cancelled or not rec.reminder:
                     continue
+                week_at, day_at = reminder_times(rec.start_at)
                 try:
-                    if not rec.day_sent and now >= rec.start_at - day:
+                    if not rec.day_sent and now >= day_at:
                         # Bot停止などで1週間前の分を逃していたら、前日分だけ送る
                         rec.week_sent = rec.day_sent = True
                         await self.notify(rec, self.reminder_text(rec, "明日"), include_gm=True)
-                    elif not rec.week_sent and now >= rec.start_at - week:
+                    elif not rec.week_sent and now >= week_at:
                         rec.week_sent = True
                         await self.notify(rec, self.reminder_text(rec, "1週間後"), include_gm=True)
                     else:

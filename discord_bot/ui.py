@@ -1,24 +1,25 @@
-"""募集の作成・編集・取消に使うフォーム(モーダル)とボタン。"""
+"""募集の作成・編集・取消に使うフォーム(モーダル)・カレンダー・ボタン。"""
 
 from __future__ import annotations
 
 import time
 from dataclasses import replace
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 import discord
 
 from render import (
-    DATE_FORMAT_HINT,
-    DAY,
-    WEEK,
     INTEREST_EMOJI,
     JOIN_EMOJI,
+    TIME_FORMAT_HINT,
     TZ,
     build_embed,
-    format_input_datetime,
-    parse_datetime,
+    calendar_text,
+    combine,
+    format_day,
+    parse_time,
+    reminder_times,
 )
 from store import EXTRA_FIELDS, STATUS_CANCELLED, Recruitment
 
@@ -26,33 +27,37 @@ if TYPE_CHECKING:
     from bot import RecruitBot
 
 GM_MENU_ID = "recruit:gm_menu"
+CALENDAR_MONTHS_AHEAD = 12  # カレンダーで選べるのは今月から12か月先まで
+
+OnStartPicked = Callable[[discord.Interaction, int], Awaitable[None]]
 
 
 def reset_reminder_flags(rec: Recruitment) -> None:
-    """開催日時から見て、すでに過ぎているリマインドは「送信済み」扱いにする。"""
-    start = datetime.fromtimestamp(rec.start_at, TZ)
-    now = datetime.now(TZ)
-    rec.week_sent = now >= start - WEEK
-    rec.day_sent = now >= start - DAY
+    """すでに送信時刻(対象日の午前9時)を過ぎているリマインドは「送信済み」扱いにする。"""
+    now = time.time()
+    week_at, day_at = reminder_times(rec.start_at)
+    rec.week_sent = now >= week_at
+    rec.day_sent = now >= day_at
+
+
+def parse_capacity(text: str) -> int:
+    text = text.strip().translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+    if not text.isdigit() or not 1 <= int(text) <= 30:
+        raise ValueError("定員は1〜30の数字で入力してください。")
+    return int(text)
 
 
 # ---------------------------------------------------------------- フォーム
 
 
 class BasicModal(discord.ui.Modal):
-    """必須の基本項目(タイトル・日時・定員)+募集内容。作成と編集で共用。"""
+    """基本項目(タイトル・定員・募集内容)。作成と編集で共用。開催日時はカレンダーで別に選ぶ。"""
 
     def __init__(self, rec: Recruitment | None = None) -> None:
         super().__init__(title="募集内容の編集" if rec else "TRPG募集を作成", timeout=900)
         self.rec = rec
         self.title_input = discord.ui.TextInput(
             label="タイトル(シナリオ名・卓名)", max_length=100, default=rec.title if rec else None
-        )
-        self.date_input = discord.ui.TextInput(
-            label="開催日時",
-            placeholder=DATE_FORMAT_HINT,
-            max_length=40,
-            default=format_input_datetime(rec.start_at) if rec else None,
         )
         self.capacity_input = discord.ui.TextInput(
             label="定員(GMを除くプレイヤー人数)",
@@ -67,37 +72,41 @@ class BasicModal(discord.ui.Modal):
             max_length=1500,
             default=rec.details if rec else None,
         )
-        for item in (self.title_input, self.date_input, self.capacity_input, self.details_input):
+        for item in (self.title_input, self.capacity_input, self.details_input):
             self.add_item(item)
-
-    def parse(self) -> tuple[str, int, int, str]:
-        start = parse_datetime(self.date_input.value)
-        cap_text = self.capacity_input.value.strip().translate(str.maketrans("０１２３４５６７８９", "0123456789"))
-        if not cap_text.isdigit() or not 1 <= int(cap_text) <= 30:
-            raise ValueError("定員は1〜30の数字で入力してください。")
-        return self.title_input.value.strip(), int(start.timestamp()), int(cap_text), self.details_input.value
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
-            title, start_at, capacity, details = self.parse()
+            capacity = parse_capacity(self.capacity_input.value)
         except ValueError as e:
             await interaction.response.send_message(f"⚠️ {e}", ephemeral=True)
             return
+        title, details = self.title_input.value.strip(), self.details_input.value
 
         if self.rec is None:
+            # 新規作成: 続けてカレンダーで開催日を選んでもらう
             rec = Recruitment(
                 message_id=0,
                 channel_id=interaction.channel_id,
                 guild_id=interaction.guild_id,
                 gm_id=interaction.user.id,
                 title=title,
-                start_at=start_at,
+                start_at=0,
                 capacity=capacity,
                 details=details,
             )
-            view = DraftView(rec)
+            draft = DraftView(rec)
+
+            async def on_picked(picked: discord.Interaction, start_at: int) -> None:
+                rec.start_at = start_at
+                await picked.response.edit_message(content=draft.guide_text(), embed=build_embed(rec), view=draft)
+
+            calendar_view = CalendarView(on_picked)
             await interaction.response.send_message(
-                content=view.guide_text(), embed=build_embed(rec), view=view, ephemeral=True
+                content="**開催日を選んでください**(このあと開始時刻を入力します)",
+                embed=calendar_view.embed(),
+                view=calendar_view,
+                ephemeral=True,
             )
             return
 
@@ -106,13 +115,102 @@ class BasicModal(discord.ui.Modal):
         if rec is None or rec.cancelled:
             await interaction.response.send_message("この募集はもう編集できません。", ephemeral=True)
             return
-        date_changed = rec.start_at != start_at
-        rec.title, rec.start_at, rec.capacity, rec.details = title, start_at, capacity, details
-        if date_changed:
-            reset_reminder_flags(rec)
+        rec.title, rec.capacity, rec.details = title, capacity, details
         await interaction.response.defer(ephemeral=True)
         await bot.save_and_refresh(rec)
         await interaction.followup.send("✅ 募集内容を更新しました。", ephemeral=True)
+
+
+class TimeModal(discord.ui.Modal):
+    """カレンダーで日付を選んだあとに出る、開始時刻の入力フォーム。"""
+
+    def __init__(self, day: date, calendar_view: CalendarView) -> None:
+        super().__init__(title=f"{format_day(day)} の開始時刻", timeout=600)
+        self.day = day
+        self.calendar_view = calendar_view
+        self.time_input = discord.ui.TextInput(label="開始時刻", placeholder=TIME_FORMAT_HINT, max_length=10)
+        self.add_item(self.time_input)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            start = combine(self.day, parse_time(self.time_input.value))
+        except ValueError as e:
+            # カレンダーを描き直して(プルダウンの選択をリセットして)選び直してもらう
+            self.calendar_view.render()
+            await interaction.response.edit_message(
+                content=f"⚠️ {e} もう一度日付を選んでください。",
+                embed=self.calendar_view.embed(),
+                view=self.calendar_view,
+            )
+            return
+        await self.calendar_view.on_picked(interaction, int(start.timestamp()))
+
+
+class CalendarView(discord.ui.View):
+    """月カレンダーを表示し、プルダウンから開催日を選ばせる(Discordに日付ピッカーがないための代用)。"""
+
+    def __init__(self, on_picked: OnStartPicked, initial: date | None = None) -> None:
+        super().__init__(timeout=900)
+        self.on_picked = on_picked
+        self.today = datetime.now(TZ).date()
+        base = initial if initial and initial >= self.today else self.today
+        self.year, self.month = base.year, base.month
+        self.render()
+
+    def month_index(self) -> int:
+        return (self.year - self.today.year) * 12 + (self.month - self.today.month)
+
+    def embed(self) -> discord.Embed:
+        return discord.Embed(
+            title=f"📅 {self.year}年{self.month}月",
+            description=calendar_text(self.year, self.month, self.today),
+            color=discord.Color.blurple(),
+        )
+
+    def render(self) -> None:
+        self.clear_items()
+
+        prev_btn = discord.ui.Button(label="◀ 前の月", row=0, disabled=self.month_index() <= 0)
+        next_btn = discord.ui.Button(label="次の月 ▶", row=0, disabled=self.month_index() >= CALENDAR_MONTHS_AHEAD)
+        prev_btn.callback = lambda i: self.shift(i, -1)
+        next_btn.callback = lambda i: self.shift(i, +1)
+        self.add_item(prev_btn)
+        self.add_item(next_btn)
+
+        # プルダウンは1つ25件までなので、前半(1〜15日)と後半(16日〜末日)に分ける
+        days = []
+        d = date(self.year, self.month, 1)
+        while d.month == self.month:
+            if d >= self.today:
+                days.append(d)
+            d = date.fromordinal(d.toordinal() + 1)
+        halves = [
+            ("1〜15日から選ぶ", [x for x in days if x.day <= 15]),
+            ("16日〜月末から選ぶ", [x for x in days if x.day > 15]),
+        ]
+        for row, (placeholder, choices) in enumerate(halves, start=1):
+            if not choices:
+                continue
+            select = discord.ui.Select(
+                placeholder=placeholder,
+                row=row,
+                options=[discord.SelectOption(label=format_day(x), value=x.isoformat()) for x in choices],
+            )
+            select.callback = self.make_pick(select)
+            self.add_item(select)
+
+    async def shift(self, interaction: discord.Interaction, delta: int) -> None:
+        total = self.year * 12 + (self.month - 1) + delta
+        self.year, self.month = divmod(total, 12)
+        self.month += 1
+        self.render()
+        await interaction.response.edit_message(embed=self.embed(), view=self)
+
+    def make_pick(self, select: discord.ui.Select):
+        async def pick(interaction: discord.Interaction) -> None:
+            await interaction.response.send_modal(TimeModal(date.fromisoformat(select.values[0]), self))
+
+        return pick
 
 
 class ExtrasModal(discord.ui.Modal):
@@ -163,6 +261,18 @@ class DraftView(discord.ui.View):
             "必要なら「追加項目を入力」で項目を足し、リマインドの有無を決めてから「投稿する」を押してください。"
         )
 
+    @discord.ui.button(label="日時を変更", emoji="📅", style=discord.ButtonStyle.secondary)
+    async def change_date(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        async def on_picked(picked: discord.Interaction, start_at: int) -> None:
+            self.rec.start_at = start_at
+            await picked.response.edit_message(content=self.guide_text(), embed=build_embed(self.rec), view=self)
+
+        initial = datetime.fromtimestamp(self.rec.start_at, TZ).date() if self.rec.start_at else None
+        calendar_view = CalendarView(on_picked, initial)
+        await interaction.response.edit_message(
+            content="**開催日を選んでください**", embed=calendar_view.embed(), view=calendar_view
+        )
+
     def update_reminder_button(self) -> None:
         self.toggle_reminder.label = f"リマインド: {'あり' if self.rec.reminder else 'なし'}"
         self.toggle_reminder.style = discord.ButtonStyle.success if self.rec.reminder else discord.ButtonStyle.secondary
@@ -185,7 +295,7 @@ class DraftView(discord.ui.View):
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         bot: RecruitBot = interaction.client
         if self.rec.start_at <= time.time():
-            await interaction.response.send_message("⚠️ 開催日時が過ぎています。作り直してください。", ephemeral=True)
+            await interaction.response.send_message("⚠️ 開催日時が過ぎています。「日時を変更」から選び直してください。", ephemeral=True)
             return
         await interaction.response.edit_message(content="投稿中…", embed=None, view=None)
         reset_reminder_flags(self.rec)
@@ -245,6 +355,29 @@ class GmPanel(discord.ui.View):
     async def edit_basic(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if rec := await self.load(interaction):
             await interaction.response.send_modal(BasicModal(rec))
+
+    @discord.ui.button(label="日時を変更", emoji="📅", style=discord.ButtonStyle.primary)
+    async def edit_date(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        rec = await self.load(interaction)
+        if rec is None:
+            return
+
+        async def on_picked(picked: discord.Interaction, start_at: int) -> None:
+            bot: RecruitBot = picked.client
+            latest = bot.store.get(self.message_id)
+            if latest is None or latest.cancelled:
+                await picked.response.edit_message(content="この募集はもう編集できません。", embed=None, view=None)
+                return
+            latest.start_at = start_at
+            reset_reminder_flags(latest)  # 新しい日時に合わせてリマインドを組み直す
+            await picked.response.edit_message(content="更新中…", embed=None, view=None)
+            await bot.save_and_refresh(latest)
+            await picked.edit_original_response(content=f"✅ 開催日時を <t:{start_at}:F> に変更しました。")
+
+        calendar_view = CalendarView(on_picked, datetime.fromtimestamp(rec.start_at, TZ).date())
+        await interaction.response.send_message(
+            content="**新しい開催日を選んでください**", embed=calendar_view.embed(), view=calendar_view, ephemeral=True
+        )
 
     @discord.ui.button(label="追加項目を編集", emoji="📝", style=discord.ButtonStyle.secondary)
     async def edit_extras(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:

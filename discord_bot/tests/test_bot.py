@@ -4,8 +4,8 @@ import asyncio
 import os
 import sys
 import tempfile
-import time
-from datetime import datetime
+import time as _time
+from datetime import date, datetime, time as dtime
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,7 +14,7 @@ os.environ["DB_PATH"] = os.path.join(tempfile.mkdtemp(), "test.db")
 import pytest
 
 import bot as botmod
-from render import TZ, build_embed, parse_datetime
+from render import TZ, build_embed, calendar_text, combine, parse_time, reminder_times
 from store import Recruitment, Store
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=TZ)
@@ -22,28 +22,40 @@ NOW = datetime(2026, 10, 10, 12, 0, tzinfo=TZ)
 
 @pytest.mark.parametrize(
     "text,expected",
-    [
-        ("2026/10/20 21:00", datetime(2026, 10, 20, 21, 0, tzinfo=TZ)),
-        ("10/20 21:30", datetime(2026, 10, 20, 21, 30, tzinfo=TZ)),
-        ("10月20日 21時", datetime(2026, 10, 20, 21, 0, tzinfo=TZ)),
-        ("10/20(火) 21:00〜", datetime(2026, 10, 20, 21, 0, tzinfo=TZ)),
-        ("１０／２０ ２１：００", datetime(2026, 10, 20, 21, 0, tzinfo=TZ)),
-        ("1/5 20:00", datetime(2027, 1, 5, 20, 0, tzinfo=TZ)),  # 年省略で過ぎた日付は翌年
-    ],
+    [("21:00", dtime(21, 0)), ("21時", dtime(21, 0)), ("21時30分", dtime(21, 30)), ("2130", dtime(21, 30)),
+     ("９：０５", dtime(9, 5)), ("21:00〜", dtime(21, 0))],
 )
-def test_parse_datetime(text, expected):
-    assert parse_datetime(text, NOW) == expected
+def test_parse_time(text, expected):
+    assert parse_time(text) == expected
 
 
-@pytest.mark.parametrize("text", ["来週の土曜", "2026/2/30 21:00", "2026/10/1 21:00"])
-def test_parse_datetime_invalid(text):
+@pytest.mark.parametrize("text", ["夜", "25:00", "21:75"])
+def test_parse_time_invalid(text):
     with pytest.raises(ValueError):
-        parse_datetime(text, NOW)
+        parse_time(text)
+
+
+def test_combine_rejects_past():
+    assert combine(date(2026, 10, 20), dtime(21), NOW) == datetime(2026, 10, 20, 21, tzinfo=TZ)
+    with pytest.raises(ValueError):
+        combine(date(2026, 10, 10), dtime(11), NOW)
+
+
+def test_reminder_times_are_9am():
+    start = int(datetime(2026, 10, 20, 21, 0, tzinfo=TZ).timestamp())
+    week_at, day_at = reminder_times(start)
+    assert datetime.fromtimestamp(week_at, TZ) == datetime(2026, 10, 13, 9, 0, tzinfo=TZ)
+    assert datetime.fromtimestamp(day_at, TZ) == datetime(2026, 10, 19, 9, 0, tzinfo=TZ)
+
+
+def test_calendar_text_marks_past_days():
+    text = calendar_text(2026, 10, date(2026, 10, 10))
+    assert " 日 月 火 水 木 金 土" in text and " ・ 10\n 11 12" in text
 
 
 def make_rec(**kw):
     base = dict(message_id=1, channel_id=2, guild_id=3, gm_id=10, title="狂気山脈",
-                start_at=int(time.time()) + 30 * 86400, capacity=2)
+                start_at=int(_time.time()) + 30 * 86400, capacity=2)
     base.update(kw)
     return Recruitment(**base)
 
@@ -94,7 +106,7 @@ def test_sync_keeps_order_and_excludes_gm_and_bots():
     assert out.interested == [7]  # 参加希望の3は興味ありから除く
 
 
-def test_reminders():
+def test_reminders(monkeypatch):
     b = botmod.bot
     sent = []
 
@@ -102,14 +114,22 @@ def test_reminders():
         sent.append(text)
 
     b.notify = fake_notify
-    now = int(time.time())
-    b.store.save(make_rec(message_id=100, start_at=now + 6 * 86400))  # 1週間以内 → 1週間前分
-    b.store.save(make_rec(message_id=101, start_at=now + 3600))  # 前日分のみ
-    b.store.save(make_rec(message_id=102, start_at=now + 20 * 86400))  # まだ
-    b.store.save(make_rec(message_id=103, start_at=now + 3600, reminder=False))  # リマインドなし
-    asyncio.run(b.reminder_loop.coro(b))
-    assert len(sent) == 2 and any("1週間後" in s for s in sent) and any("明日" in s for s in sent)
-    assert b.store.get(101).week_sent and b.store.get(101).day_sent
-    sent.clear()
-    asyncio.run(b.reminder_loop.coro(b))
-    assert sent == []  # 二重送信しない
+    start = int(datetime(2026, 10, 20, 21, 0, tzinfo=TZ).timestamp())
+    for mid in (100, 101, 102):
+        b.store.save(make_rec(message_id=mid, start_at=start))
+    b.store.save(make_rec(message_id=103, start_at=start, reminder=False))  # リマインドなし
+    b.store.save(make_rec(message_id=104, start_at=start, week_sent=True, day_sent=True))  # 送信済み
+
+    def at(dt):
+        monkeypatch.setattr(botmod.time, "time", lambda: dt.timestamp())
+        sent.clear()
+        asyncio.run(b.reminder_loop.coro(b))
+        return list(sent)
+
+    assert at(datetime(2026, 10, 13, 8, 59, tzinfo=TZ)) == []  # 1週間前の9時より前
+    week = at(datetime(2026, 10, 13, 9, 0, tzinfo=TZ))
+    assert len(week) == 3 and all("1週間後" in t for t in week)
+    assert at(datetime(2026, 10, 15, 12, 0, tzinfo=TZ)) == []  # 二重送信しない
+    day = at(datetime(2026, 10, 19, 9, 0, tzinfo=TZ))
+    assert len(day) == 3 and all("明日" in t for t in day)
+    assert at(datetime(2026, 10, 19, 10, 0, tzinfo=TZ)) == []
